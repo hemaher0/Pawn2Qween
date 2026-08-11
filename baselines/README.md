@@ -1,5 +1,7 @@
 <!--
 SPDX-FileCopyrightText: Copyright 2026 SK TELECOM CO., LTD.
+SPDX-FileCopyrightText: Copyright 2026 hemaher0
+
 SPDX-License-Identifier: Apache-2.0
 -->
 
@@ -42,7 +44,7 @@ ID·순서 변경과 반복 실행의 결정성은
 검사합니다.
 
 ```console
-PYTHONPATH=src python3 baselines/prompt_heuristic.py \
+uv run --locked --no-dev python baselines/prompt_heuristic.py \
   --input data/toy/inputs.json \
   --tier balanced \
   --output build/prompt-heuristic-balanced.json
@@ -67,7 +69,7 @@ baseline은 `ax31-light`와 `ax31`만 배분합니다. 실제 Train/Dev의 `self
 
 ```console
 for tier in fast balanced premium; do
-  PYTHONPATH=src python3 baselines/feature_budget.py \
+  uv run --locked --no-dev python baselines/feature_budget.py \
     --input data/toy/inputs.json \
     --tier "$tier" \
     --output "build/feature-budget/$tier.json"
@@ -100,9 +102,8 @@ Premium에서는 비용 변동이 큰 K1 선택을 기본 안전계수로 먼저
 세 값만 보정합니다.
 
 ```console
-python3 -m pip install -r baselines/requirements-train.txt
-
-PYTHONPATH=src python3 baselines/train_hash_regex.py \
+uv run --locked --no-dev --group train \
+  python baselines/train_hash_regex.py \
   --input data/materialized/train/inputs.json \
   --outcomes data/train/outcomes.json \
   --validation-input data/materialized/dev/inputs.json \
@@ -111,7 +112,7 @@ PYTHONPATH=src python3 baselines/train_hash_regex.py \
   --report build/hash-regex/train-report.json
 
 for tier in fast balanced premium; do
-  PYTHONPATH=src python3 baselines/hash_regex.py \
+  uv run --locked --no-dev python baselines/hash_regex.py \
     --input data/materialized/dev/inputs.json \
     --artifact build/hash-regex/artifact.json \
     --tier "$tier" \
@@ -124,7 +125,7 @@ done
 따라서 학습 없이 아래처럼 바로 실행할 수도 있습니다.
 
 ```console
-PYTHONPATH=src python3 baselines/hash_regex.py \
+uv run --locked --no-dev python baselines/hash_regex.py \
   --input data/materialized/dev/inputs.json \
   --artifact baselines/hash-regex-public.v1.json \
   --tier balanced \

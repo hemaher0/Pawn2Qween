@@ -1,0 +1,114 @@
+# SPDX-FileCopyrightText: Copyright 2026 hemaher0
+# SPDX-License-Identifier: Apache-2.0
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.3"
+          python-version: "3.11"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Check lock file
+        run: uv lock --check
+      - name: Sync development environment
+        run: uv sync --locked
+      - name: Lint Python
+        run: uv run --locked ruff check .
+      - name: Check license metadata
+        run: uv run --locked reuse lint
+      - name: Build distributions
+        run: uv build --clear
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.11"]
+    env:
+      PYTHONPATH: src
+      UV_PYTHON: ${{ matrix.python-version }}
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.3"
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Sync runtime environment
+        run: uv sync --locked --no-dev
+      - name: Run tests
+        run: uv run --locked --no-dev python -m unittest discover -s tests -p 'test_*.py'
+
+  publish:
+    needs: [quality, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.3"
+          python-version: "3.11"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Sync runtime environment
+        run: uv sync --locked --no-dev
+      - name: Build release distributions
+        run: uv build --clear
+      - name: Prepare release metadata
+        id: release
+        run: >-
+          uv run --locked --no-dev python tools/prepare_release.py
+          --tag "${GITHUB_REF_NAME}"
+          --notes-output release-notes.md
+          --github-output "${GITHUB_OUTPUT}"
+      - name: Create stable GitHub Release
+        if: steps.release.outputs.channel == 'stable'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${GITHUB_REF_NAME}"
+          dist/*.whl dist/*.tar.gz
+          --verify-tag
+          --title "${{ steps.release.outputs.title }}"
+          --notes-file release-notes.md
+          --latest
+      - name: Create latest prerelease
+        if: steps.release.outputs.channel == 'latest'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${GITHUB_REF_NAME}"
+          dist/*.whl dist/*.tar.gz
+          --verify-tag
+          --title "${{ steps.release.outputs.title }}"
+          --notes-file release-notes.md
+          --prerelease
+          --latest=false

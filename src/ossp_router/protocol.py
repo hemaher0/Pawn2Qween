@@ -1,4 +1,6 @@
 # SPDX-FileCopyrightText: Copyright 2026 SK TELECOM CO., LTD.
+# SPDX-FileCopyrightText: Copyright 2026 hemaher0
+#
 # SPDX-License-Identifier: Apache-2.0
 
 """Frozen v1 wire protocol for prompt-only router evaluation."""
@@ -620,10 +622,10 @@ def load_policy(path: Path) -> RoutingPolicy:
 
 def load_bundled_policy() -> RoutingPolicy:
     try:
-        text = resources.read_text(
-            "ossp_router.resources",
-            "routing-policy.v1.json",
-            encoding="utf-8",
+        text = (
+            resources.files("ossp_router.resources")
+            .joinpath("routing-policy.v1.json")
+            .read_text(encoding="utf-8")
         )
     except (OSError, UnicodeError) as exc:
         raise ProtocolError(f"내장 정책 파일을 읽을 수 없습니다: {exc}") from exc

@@ -1,5 +1,7 @@
 <!--
 SPDX-FileCopyrightText: Copyright 2026 SK TELECOM CO., LTD.
+SPDX-FileCopyrightText: Copyright 2026 hemaher0
+
 SPDX-License-Identifier: Apache-2.0
 -->
 
@@ -7,26 +9,28 @@ SPDX-License-Identifier: Apache-2.0
 
 ## 로컬 실행
 
-런타임은 Python 3.9 이상과 표준 라이브러리만 사용합니다. 저장소를 설치하지
-않고 다음 명령으로 전체 테스트를 실행할 수 있습니다.
+런타임은 Python 3.9 이상과 표준 라이브러리만 사용합니다. 개발 환경은
+`.python-version`의 Python 3.11과 uv 0.12.3을 기준으로 합니다. 잠금 파일에
+맞춰 개발 도구를 설치하고 전체 테스트를 실행합니다.
 
 ```console
-PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_*.py'
+uv sync --locked
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'
 ```
 
 toy 입력으로 제출을 만들고 검사하는 명령은 다음과 같습니다.
 
 ```console
-PYTHONPATH=src python3 baselines/always_light.py \
+uv run --locked --no-dev python baselines/always_light.py \
   --input data/toy/inputs.json \
   --output-dir build/toy-submission
 
-PYTHONPATH=src python3 baselines/prompt_heuristic.py \
+uv run --locked --no-dev python baselines/prompt_heuristic.py \
   --input data/toy/inputs.json \
   --tier fast \
   --output build/prompt-heuristic-fast.json
 
-PYTHONPATH=src python3 -m ossp_router.cli self-check \
+uv run --locked --no-dev python -m ossp_router.cli self-check \
   --input data/toy/inputs.json \
   --outcomes data/toy/outcomes.json \
   --submissions build/toy-submission \
@@ -38,7 +42,7 @@ materialization을 마친 공개 Train/Dev 전체의 로컬 선별 측정은 다
 공식 보고서를 덮어쓰지 않도록 결과는 `build/`에 기록합니다.
 
 ```console
-PYTHONPATH=src python3 tools/benchmark_runtime.py \
+uv run --locked --no-dev python tools/benchmark_runtime.py \
   --json-output build/runtime-benchmark.local.json \
   --markdown-output build/runtime-benchmark.local.md
 ```
@@ -75,12 +79,39 @@ SPDX-License-Identifier: Apache-2.0
 
 ## 검증
 
-REUSE 도구가 있으면 다음 검사도 실행합니다.
+커밋 전에는 잠금 상태, 코드 검사, 라이선스, 테스트와 배포 파일 생성을 함께
+확인합니다.
 
 ```console
-reuse lint
+uv lock --check
+uv run --locked ruff check .
+uv run --locked reuse lint
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'
+uv build --clear
 ```
 
 저장소 공개 전에는 비밀 탐지, 로컬 링크, 심볼릭 링크, 라이선스 전문 해시,
 참가자 문서와 구현의 정책 값 일치를 함께 확인합니다. 공개 전 작업 목록과
 승인 기록은 공개 저장소 밖의 조직 운영 공간에서 관리합니다.
+
+## 릴리스
+
+일반 branch push와 `main` push는 CI만 실행하며 릴리스를 만들지 않습니다.
+GitHub Release는 지원되는 버전 tag를 push할 때만 생성됩니다. 릴리스 전에
+`pyproject.toml`의 `project.version`을 tag와 일치시키고, `CHANGELOG.md`의
+`[Unreleased]` 내용을 tag에서 선행 `v`를 뺀 버전 제목으로 옮깁니다. 해당
+제목은 정확히 하나이고 내용이 비어 있지 않아야 합니다.
+
+- stable: `vMAJOR.MINOR.PATCH` 형식이며 GitHub의 최신 정식 릴리스가 됩니다.
+- latest: `vMAJOR.MINOR.PATCH-alpha.N`, `-beta.N`, `-rc.N` 형식이며 GitHub
+  prerelease로 만들고 최신 정식 릴리스 표시는 유지합니다.
+
+latest tag의 SemVer 표기는 project version에서 PEP 440으로 바꿉니다. 예를
+들어 `v2.0.0-rc.4`는 `project.version = "2.0.0rc4"`와 changelog 제목
+`## [2.0.0-rc.4] - YYYY-MM-DD`를 사용합니다. stable `v1.2.3`은 project
+version과 changelog 버전 모두 `1.2.3`입니다.
+
+tag를 push하기 전에 위 검증 명령을 모두 실행합니다. release workflow도 같은
+품질·Python 버전 검사를 다시 통과한 뒤 wheel과 source distribution을 해당
+changelog 내용과 함께 GitHub Release에 첨부합니다. PyPI나 컨테이너
+registry에는 게시하지 않습니다.

@@ -1,32 +1,28 @@
+# SPDX-FileCopyrightText: Copyright 2026 hemaher0
+# SPDX-License-Identifier: Apache-2.0
+
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  The project is a Python 3.9+ standard-library runtime for a prompt-only LLM
+  routing challenge. Development and release tooling uses uv 0.12.3 with
+  Python 3.11, PEP 621 metadata, dependency groups, and a committed lock file.
+  Public runtime behavior, scoring, schemas, and container isolation rules are
+  compatibility-sensitive. Source files use Apache-2.0 SPDX metadata, and
+  participant-facing documentation is primarily Korean.
+  GitHub Actions CI validates main-branch changes. GitHub Releases are created
+  only from supported version tags and never from ordinary branch pushes.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+rules:
+  proposal:
+    - State explicit non-goals when runtime, scoring, or release scope could be ambiguous.
+  specs:
+    - Include testable failure and safety scenarios for release or automation changes.
+  tasks:
+    - Order migration tasks so consumers move before legacy files are removed.
 
-# Per-operation guidance (optional)
-# Add advisory guidance for how apply and archive work should be conducted.
-# This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+operations:
+  apply:
+    guidance:
+      - Run focused tests before repository-wide verification.
+      - Keep runtime and challenge behavior unchanged unless a spec explicitly changes it.

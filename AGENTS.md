@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: Copyright 2026 hemaher0
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Development Workflow
 
 - Use OpenSpec for feature, behavior, or architecture changes.

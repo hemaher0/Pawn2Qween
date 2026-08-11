@@ -1,4 +1,6 @@
 # SPDX-FileCopyrightText: Copyright 2026 SK TELECOM CO., LTD.
+# SPDX-FileCopyrightText: Copyright 2026 hemaher0
+#
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -86,7 +88,9 @@ class ParticipantRuntimeCheckTest(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as temporary:
             output = pathlib.Path(temporary)
-            (output / "submission.json").write_text("{}", encoding="utf-8")
+            submission = output / "submission.json"
+            submission.write_text("{}", encoding="utf-8")
+            submission.chmod(0o644)
             checked = check_runtime._validate_output_directory(result, output)
             self.assertIs(result, checked)
             (output / "extra.txt").write_text("x", encoding="utf-8")

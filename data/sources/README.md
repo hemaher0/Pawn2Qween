@@ -1,5 +1,7 @@
 <!--
 SPDX-FileCopyrightText: Copyright 2026 SK TELECOM CO., LTD.
+SPDX-FileCopyrightText: Copyright 2026 hemaher0
+
 SPDX-License-Identifier: Apache-2.0
 -->
 
@@ -27,7 +29,7 @@ SHA-256을 확인할 수 있습니다. AIME 원문은 이 캐시에만 두고 �
 아카이브에 넣지 않습니다.
 
 ```console
-python3 tools/fetch_public_sources.py \
+uv run --locked --no-dev python tools/fetch_public_sources.py \
   --source aime24-public \
   --source aime25-public
 ```
@@ -38,9 +40,8 @@ python3 tools/fetch_public_sources.py \
 컨테이너의 Python 요구사항은 이 자료 생성용 요구사항과 별개입니다.
 
 ```console
-python3 -m venv .venv-data
-.venv-data/bin/pip install -r data/sources/requirements-materialize-public-data.txt
-.venv-data/bin/python tools/materialize_public_data.py
+uv run --locked --no-dev --group materialize \
+  python tools/materialize_public_data.py
 ```
 
 DeepMind Mathematics는 저장소에 upstream 코드를 복사하지 않습니다. 공개
@@ -49,12 +50,11 @@ DeepMind Mathematics는 저장소에 upstream 코드를 복사하지 않습니�
 900개 reference hash가 모두 일치한 뒤에만 선택된 prompt fragment를 씁니다.
 
 ```console
-python3 -m venv .venv-math
-.venv-math/bin/pip install -r data/sources/requirements-deepmind-mathematics.txt
 git clone https://github.com/google-deepmind/mathematics_dataset.git \
   data/cache/mathematics_dataset
 git -C data/cache/mathematics_dataset checkout \
   427f45075f84b8b9774950196ad63867ca20ffb3
-.venv-math/bin/python tools/reproduce_deepmind_mathematics.py \
+uv run --locked --no-dev --group deepmind \
+  python tools/reproduce_deepmind_mathematics.py \
   --source-dir data/cache/mathematics_dataset
 ```

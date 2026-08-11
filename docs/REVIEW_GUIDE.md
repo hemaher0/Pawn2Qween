@@ -1,5 +1,7 @@
 <!--
 SPDX-FileCopyrightText: Copyright 2026 SK TELECOM CO., LTD.
+SPDX-FileCopyrightText: Copyright 2026 hemaher0
+
 SPDX-License-Identifier: Apache-2.0
 -->
 
@@ -125,10 +127,11 @@ Git 이력, 운영 설정과 비공개 평가 자료를 가져오지 않고 별�
 ## 검증 명령
 
 ```console
-PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_*.py'
-ruff check .
-reuse lint
-python3 -m build
+uv lock --check
+uv run --locked ruff check .
+uv run --locked reuse lint
+uv run --locked python -m unittest discover -s tests -p 'test_*.py'
+uv build --clear
 ```
 
 컨테이너 통합 테스트와 공식 Apple Silicon 측정은

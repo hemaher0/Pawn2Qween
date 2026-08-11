@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: Copyright 2026 hemaher0
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Development Workflow
 
 - Keep research, exploratory designs, and working plans in the ignored local

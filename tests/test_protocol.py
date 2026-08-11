@@ -1,4 +1,6 @@
 # SPDX-FileCopyrightText: Copyright 2026 SK TELECOM CO., LTD.
+# SPDX-FileCopyrightText: Copyright 2026 hemaher0
+#
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -7,6 +9,7 @@ import copy
 import pathlib
 import re
 import unittest
+import warnings
 from decimal import Decimal
 
 from ossp_router.protocol import (
@@ -58,6 +61,18 @@ class ProtocolTest(unittest.TestCase):
         file_policy = load_policy(ROOT / "configs/routing-policy.v1.json")
         self.assertEqual(file_policy, load_bundled_policy())
         self.assertEqual(POLICY_SHA256, policy_sha256(file_policy))
+
+    def test_bundled_policy_loading_has_no_deprecation_warning(self) -> None:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", DeprecationWarning)
+            load_bundled_policy()
+
+        deprecations = [
+            warning
+            for warning in caught
+            if issubclass(warning.category, DeprecationWarning)
+        ]
+        self.assertEqual([], deprecations)
 
     def test_challenge_id_is_nonempty_and_not_hard_coded(self) -> None:
         value = copy.deepcopy(self.input_value)

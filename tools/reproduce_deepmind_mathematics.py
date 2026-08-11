@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
+
 # SPDX-FileCopyrightText: Copyright 2026 SK TELECOM CO., LTD.
+# SPDX-FileCopyrightText: Copyright 2026 hemaher0
+#
 # SPDX-License-Identifier: Apache-2.0
 """Reproduce and verify the pinned DeepMind Mathematics reference pool.
 
@@ -408,8 +411,9 @@ def load_upstream(source_dir: Path) -> tuple[Any, Any, Any, Any]:
         from sympy.core.random import rng as sympy_rng
     except ImportError as exc:
         raise ReproductionError(
-            "missing generator dependency; install data/sources/"
-            "requirements-deepmind-mathematics.txt"
+            "missing generator dependency; run with uv group 'deepmind': "
+            "uv run --locked --no-dev --group deepmind python "
+            "tools/reproduce_deepmind_mathematics.py"
         ) from exc
     finally:
         try:

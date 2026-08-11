@@ -1,4 +1,6 @@
 # SPDX-FileCopyrightText: Copyright 2026 SK TELECOM CO., LTD.
+# SPDX-FileCopyrightText: Copyright 2026 hemaher0
+#
 # SPDX-License-Identifier: Apache-2.0
 
 """Repository structure, licensing, and participant-document checks."""
@@ -25,6 +27,10 @@ CANONICAL_LICENSE_HASHES = {
 }
 
 REQUIRED_FILES = {
+    ".github/workflows/ci.yml",
+    ".github/workflows/release.yml",
+    ".python-version",
+    "CHANGELOG.md",
     "CONTRIBUTING.md",
     "DATA_LICENSES.md",
     "DEVELOPING.md",
@@ -34,7 +40,7 @@ REQUIRED_FILES = {
     "pyproject.toml",
     "README.md",
     "REUSE.toml",
-    "setup.cfg",
+    "uv.lock",
     "configs/routing-policy.v1.json",
     "container/BASE_IMAGE.md",
     "container/Dockerfile",
@@ -56,7 +62,6 @@ REQUIRED_FILES = {
     "baselines/feature_budget.py",
     "baselines/hash_regex.py",
     "baselines/prompt_heuristic.py",
-    "baselines/requirements-train.txt",
     "baselines/train_hash_regex.py",
     "schemas/input.v1.schema.json",
     "schemas/outcome.v1.schema.json",
@@ -75,6 +80,7 @@ REQUIRED_FILES = {
     "src/ossp_router/scoring.py",
     "src/ossp_router/tiebreak_latency.py",
     "tests/test_operator_helper.py",
+    "tests/test_prepare_release.py",
     "tests/test_orchestrator.py",
     "tests/test_check_runtime.py",
     "tests/test_feature_budget_baseline.py",
@@ -86,7 +92,15 @@ REQUIRED_FILES = {
     "tests/test_tiebreak_latency.py",
     "tools/benchmark_runtime.py",
     "tools/check_runtime.py",
+    "tools/prepare_release.py",
     "tools/validate_technical_submission.py",
+}
+
+LEGACY_FILES = {
+    "setup.cfg",
+    "baselines/requirements-train.txt",
+    "data/sources/requirements-deepmind-mathematics.txt",
+    "data/sources/requirements-materialize-public-data.txt",
 }
 
 DATA_CONFIGURATIONS = {
@@ -104,6 +118,8 @@ DATA_CONFIGURATIONS = {
 }
 
 LOCAL_GENERATED_PREFIXES = (
+    (".agents",),
+    (".codex",),
     (".git",),
     (".ruff_cache",),
     (".venv",),
@@ -112,6 +128,7 @@ LOCAL_GENERATED_PREFIXES = (
     ("dist",),
     ("data", "cache"),
     ("data", "materialized"),
+    ("references",),
 )
 
 
@@ -141,6 +158,62 @@ class RepositoryPolicyTest(unittest.TestCase):
         missing = sorted(path for path in REQUIRED_FILES if not (ROOT / path).is_file())
         self.assertEqual([], missing)
         self.assertFalse((ROOT / "docs/RELEASE_BLOCKERS.md").exists())
+
+    def test_legacy_packaging_files_are_removed(self) -> None:
+        present = sorted(path for path in LEGACY_FILES if (ROOT / path).exists())
+        self.assertEqual([], present)
+
+    def test_ci_workflow_checks_main_without_releasing(self) -> None:
+        path = ROOT / ".github/workflows/ci.yml"
+        self.assertTrue(path.is_file(), "CI workflow is missing")
+        workflow = path.read_text(encoding="utf-8")
+        self.assertRegex(workflow, r"(?m)^  push:\n    branches: \[main\]$")
+        self.assertRegex(
+            workflow,
+            r"(?m)^  pull_request:\n    branches: \[main\]$",
+        )
+        self.assertNotIn("tags:", workflow)
+        self.assertNotIn("gh release", workflow)
+        self.assertIn("contents: read", workflow)
+        self.assertIn("cancel-in-progress: true", workflow)
+
+    def test_release_workflow_is_tag_only_and_preserves_stable_latest(self) -> None:
+        path = ROOT / ".github/workflows/release.yml"
+        self.assertTrue(path.is_file(), "release workflow is missing")
+        workflow = path.read_text(encoding="utf-8")
+        self.assertRegex(
+            workflow,
+            r'(?m)^  push:\n    tags:\n      - "v\*\.\*\.\*"$',
+        )
+        self.assertNotRegex(workflow, r"(?m)^    branches:")
+        self.assertNotIn("pull_request:", workflow)
+        self.assertNotIn("workflow_dispatch:", workflow)
+        self.assertIn("contents: read", workflow)
+        self.assertRegex(
+            workflow,
+            r"(?ms)^  publish:.*?^    permissions:\n      contents: write$",
+        )
+        self.assertIn("--latest", workflow)
+        self.assertIn("--prerelease", workflow)
+        self.assertIn("--latest=false", workflow)
+        self.assertNotIn("pypi", workflow.lower())
+        self.assertNotIn("ghcr", workflow.lower())
+
+    def test_workflows_pin_actions_and_uv(self) -> None:
+        workflows = "\n".join(
+            (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
+            for name in ("ci.yml", "release.yml")
+            if (ROOT / ".github/workflows" / name).is_file()
+        )
+        self.assertIn(
+            "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd",
+            workflows,
+        )
+        self.assertIn(
+            "astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9",
+            workflows,
+        )
+        self.assertIn('version: "0.12.3"', workflows)
 
     def test_canonical_license_texts_are_unmodified(self) -> None:
         for relative_path, expected_hash in CANONICAL_LICENSE_HASHES.items():
@@ -774,9 +847,9 @@ class RepositoryPolicyTest(unittest.TestCase):
         )
 
     def test_code_distribution_includes_only_project_license(self) -> None:
-        setup = (ROOT / "setup.cfg").read_text(encoding="utf-8")
+        pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         manifest = (ROOT / "MANIFEST.in").read_text(encoding="utf-8")
-        for text in (setup, manifest):
+        for text in (pyproject, manifest):
             self.assertIn("LICENSES/Apache-2.0.txt", text)
             self.assertNotIn("LICENSES/*.txt", text)
 

@@ -1,5 +1,7 @@
 <!--
 SPDX-FileCopyrightText: Copyright 2026 SK TELECOM CO., LTD.
+SPDX-FileCopyrightText: Copyright 2026 hemaher0
+
 SPDX-License-Identifier: Apache-2.0
 -->
 
@@ -47,12 +49,11 @@ SPDX-License-Identifier: Apache-2.0
 재배포 가능한 프롬프트와 모델 답변 본문을 제외한 평가 결과는 `data/train/`과
 `data/dev/`에 있습니다. 재배포가 불가한 AIME 원문은 타 repository로부터
 Train/Dev에 필요한 고정 파일만 공개 출처에서 받아 결합합니다.
-자료 생성에는 Python 3.10 이상이 필요합니다.
+자료 생성에는 Python 3.10 이상과 uv 0.12.3이 필요합니다.
 
 ```console
-python3 -m venv .venv-data
-.venv-data/bin/pip install -r data/sources/requirements-materialize-public-data.txt
-.venv-data/bin/python tools/materialize_public_data.py
+uv run --locked --no-dev --group materialize \
+  python tools/materialize_public_data.py
 ```
 
 완성된 입력은 Git 비추적 경로인 `data/materialized/train/inputs.json`과
@@ -112,11 +113,11 @@ Train/Dev로 정책을 개발하되 별도 입력에서도 일반화하고, 정�
 있습니다. 먼저 모든 문항에 경량 모델을 선택하는 세 등급 결과를 만듭니다.
 
 ```console
-PYTHONPATH=src python3 baselines/always_light.py \
+uv run --locked --no-dev python baselines/always_light.py \
   --input data/toy/inputs.json \
   --output-dir build/toy-submission
 
-PYTHONPATH=src python3 -m ossp_router.cli self-check \
+uv run --locked --no-dev python -m ossp_router.cli self-check \
   --input data/toy/inputs.json \
   --outcomes data/toy/outcomes.json \
   --submissions build/toy-submission \
@@ -129,13 +130,13 @@ PYTHONPATH=src python3 -m ossp_router.cli self-check \
 
 ```console
 for tier in fast balanced premium; do
-  PYTHONPATH=src python3 baselines/prompt_heuristic.py \
+  uv run --locked --no-dev python baselines/prompt_heuristic.py \
     --input data/toy/inputs.json \
     --tier "$tier" \
     --output "build/prompt-heuristic/$tier.json"
 done
 
-PYTHONPATH=src python3 -m ossp_router.cli self-check \
+uv run --locked --no-dev python -m ossp_router.cli self-check \
   --input data/toy/inputs.json \
   --outcomes data/toy/outcomes.json \
   --submissions build/prompt-heuristic \
@@ -155,7 +156,7 @@ baseline과 공개 Train/Dev로 학습하는 예제는
 코드 커밋 SHA, 이미지 다이제스트와 라이선스 값을 확인합니다.
 
 ```console
-python3 tools/validate_technical_submission.py
+uv run --locked --no-dev python tools/validate_technical_submission.py
 ```
 
 최종 이미지의 실행 시간과 자원 제한은 공개 Train/Dev 전체로 미리 확인할 수
@@ -165,7 +166,7 @@ python3 tools/validate_technical_submission.py
 docker build --pull --platform linux/arm64 \
   --file container/Dockerfile --tag my-router:check .
 
-PYTHONPATH=src python3 tools/check_runtime.py \
+uv run --locked --no-dev python tools/check_runtime.py \
   --image my-router:check \
   --report build/runtime-check-report.json
 ```

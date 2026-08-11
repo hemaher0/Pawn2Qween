@@ -1,4 +1,6 @@
 # SPDX-FileCopyrightText: Copyright 2026 SK TELECOM CO., LTD.
+# SPDX-FileCopyrightText: Copyright 2026 hemaher0
+#
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -11,7 +13,6 @@ import subprocess
 import sys
 import tempfile
 import unittest
-import venv
 import zipfile
 
 
@@ -141,6 +142,8 @@ class CliTest(unittest.TestCase):
             self.assertEqual("0.5", json.loads(report_bytes[0])["final_score"])
 
     def test_wheel_console_script_uses_bundled_policy_outside_checkout(self) -> None:
+        uv = shutil.which("uv")
+        self.assertIsNotNone(uv, "uv must be installed to run packaging tests")
         with tempfile.TemporaryDirectory() as temporary:
             target = pathlib.Path(temporary)
             source = target / "source"
@@ -157,19 +160,21 @@ class CliTest(unittest.TestCase):
                 ),
             )
             wheelhouse = target / "wheelhouse"
+            uv_environment = dict(os.environ)
+            uv_environment["UV_PYTHON_DOWNLOADS"] = "never"
             built = subprocess.run(
                 [
+                    uv,
+                    "build",
+                    "--python",
                     sys.executable,
-                    "-m",
-                    "pip",
-                    "wheel",
-                    "--no-build-isolation",
-                    "--no-deps",
-                    "--wheel-dir",
+                    "--wheel",
+                    "--out-dir",
                     str(wheelhouse),
                     str(source),
                 ],
                 cwd=target,
+                env=uv_environment,
                 capture_output=True,
                 text=True,
                 check=False,
@@ -195,18 +200,34 @@ class CliTest(unittest.TestCase):
             )
 
             environment_dir = target / "venv"
-            venv.EnvBuilder(with_pip=True).create(environment_dir)
+            created = subprocess.run(
+                [
+                    uv,
+                    "venv",
+                    "--python",
+                    sys.executable,
+                    str(environment_dir),
+                ],
+                cwd=target,
+                env=uv_environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(0, created.returncode, created.stderr)
             environment_python = environment_dir / "bin" / "python"
             installed = subprocess.run(
                 [
-                    str(environment_python),
-                    "-m",
+                    uv,
                     "pip",
                     "install",
+                    "--python",
+                    str(environment_python),
                     "--no-deps",
                     str(wheel),
                 ],
                 cwd=target,
+                env=uv_environment,
                 capture_output=True,
                 text=True,
                 check=False,

@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
+
 # SPDX-FileCopyrightText: Copyright 2026 SK TELECOM CO., LTD.
+# SPDX-FileCopyrightText: Copyright 2026 hemaher0
+#
 # SPDX-License-Identifier: Apache-2.0
 """Materialize complete public Train/Dev inputs from pinned public sources."""
 
@@ -171,8 +174,9 @@ def load_aime_problems(
         import pyarrow.parquet as parquet
     except ImportError as exc:
         raise MaterializationError(
-            "pyarrow is required; install data/sources/"
-            "requirements-materialize-public-data.txt"
+            "pyarrow is required; run with uv group 'materialize': "
+            "uv run --locked --no-dev --group materialize python "
+            "tools/materialize_public_data.py"
         ) from exc
 
     aime24 = sources["aime24-public"]

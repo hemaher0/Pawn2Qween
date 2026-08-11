@@ -1,4 +1,6 @@
 # SPDX-FileCopyrightText: Copyright 2026 SK TELECOM CO., LTD.
+# SPDX-FileCopyrightText: Copyright 2026 hemaher0
+#
 # SPDX-License-Identifier: Apache-2.0
 
 """Train the public hash-regex router without retaining per-episode rows."""
@@ -44,7 +46,7 @@ def _require_numpy() -> None:
     if np is None:
         raise RuntimeError(
             "학습에는 NumPy가 필요합니다. "
-            "baselines/requirements-train.txt를 설치해 주세요."
+            "uv run --locked --no-dev --group train 명령으로 실행해 주세요."
         )
 
 

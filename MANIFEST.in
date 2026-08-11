@@ -1,6 +1,9 @@
 # SPDX-FileCopyrightText: Copyright 2026 SK TELECOM CO., LTD.
+# SPDX-FileCopyrightText: Copyright 2026 hemaher0
+#
 # SPDX-License-Identifier: Apache-2.0
 
 include NOTICE
+include CHANGELOG.md
 include LICENSES/Apache-2.0.txt
 recursive-include src/ossp_router/resources *.json

@@ -22,3 +22,5 @@ build/
 /data/cache/
 /data/materialized/
 dist/
+/.agents/
+/references

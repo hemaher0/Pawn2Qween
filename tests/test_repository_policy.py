@@ -18,6 +18,12 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 COPYRIGHT_TAG = "SPDX-File" + "CopyrightText:"
 LICENSE_TAG = "SPDX-License-" + "Identifier:"
+ORIGINAL_PROJECT_COPYRIGHT = (
+    "SPDX-File" + "CopyrightText: Copyright 2026 SK TELECOM CO., LTD."
+)
+LATER_PROJECT_COPYRIGHT = (
+    "SPDX-File" + "CopyrightText: Copyright 2026 hemaher0"
+)
 
 CANONICAL_LICENSE_HASHES = {
     "LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
@@ -163,6 +169,72 @@ class RepositoryPolicyTest(unittest.TestCase):
         present = sorted(path for path in LEGACY_FILES if (ROOT / path).exists())
         self.assertEqual([], present)
 
+    def test_public_disclosure_policy_defines_eligibility_and_exclusions(
+        self,
+    ) -> None:
+        policy = _normalized_document(ROOT / "CONTRIBUTING.md")
+        required_markers = (
+            "## Public disclosure",
+            "redistribution rights",
+            "safe to disclose",
+            "durable value",
+            "code, documentation, data, CI configuration, release artifacts, and OpenSpec artifacts",
+            "credentials, personal data, internal locations or infrastructure, and non-public URLs",
+            "private evaluation inputs or results",
+            "embargoed vulnerability details",
+            "raw AI conversation or reasoning records",
+            "confidential business material",
+            "third-party material without established redistribution rights",
+            "must remain non-public until the uncertainty is resolved",
+            "sanitized public decision",
+            "ignored local `references/` workspace",
+        )
+        self.assertEqual(
+            [], sorted(_missing_semantic_markers(policy, required_markers))
+        )
+
+    def test_agents_require_local_codex_public_disclosure_review(self) -> None:
+        instructions = _normalized_document(ROOT / "AGENTS.md")
+        required_markers = (
+            "## Public Disclosure Review",
+            "Before Codex prepares or executes a commit, push, OpenSpec archive, or release",
+            "staged diff",
+            "commits present locally but absent from the target upstream",
+            "change artifacts, affected implementation delta, synced specs, and retained archive",
+            "tagged tree, release notes, and release assets",
+            "`PASS`, `BLOCK`, or `NEEDS_CONFIRMATION`",
+            "pause the publication action",
+            "must not repeat discovered secret values",
+            "active local Codex session",
+            "separate AI API",
+        )
+        self.assertEqual(
+            [], sorted(_missing_semantic_markers(instructions, required_markers))
+        )
+
+    def test_openspec_and_ci_keep_disclosure_review_local(self) -> None:
+        ignored = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+        self.assertIn("/references", ignored)
+
+        config = _normalized_document(ROOT / "openspec/config.yaml")
+        required_markers = (
+            "public-disclosure scope and exclusions",
+            "final public-disclosure review",
+            "preserve the public-disclosure boundary",
+            "verify the public-disclosure boundary",
+            "review synced specs and retained history",
+        )
+        self.assertEqual(
+            [], sorted(_missing_semantic_markers(config, required_markers))
+        )
+
+        workflows = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+        ).casefold()
+        for forbidden in ("openai_api_key", "openai api", "codex"):
+            self.assertNotIn(forbidden, workflows)
+
     def test_ci_workflow_checks_main_without_releasing(self) -> None:
         path = ROOT / ".github/workflows/ci.yml"
         self.assertTrue(path.is_file(), "CI workflow is missing")
@@ -226,6 +298,32 @@ class RepositoryPolicyTest(unittest.TestCase):
         self.assertIn("public Train/Dev prompt adaptations", notice)
         self.assertIn("THIRD_PARTY_NOTICES.md", notice)
         self.assertNotIn("only independently authored toy inputs", notice)
+
+    def test_project_copyright_notices_follow_confirmed_git_provenance(
+        self,
+    ) -> None:
+        root_only = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+        post_root = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        modified = (ROOT / "README.md").read_text(encoding="utf-8")
+        modified_test = pathlib.Path(__file__).read_text(encoding="utf-8")
+
+        self.assertIn(ORIGINAL_PROJECT_COPYRIGHT, root_only)
+        self.assertNotIn(LATER_PROJECT_COPYRIGHT, root_only)
+        self.assertIn(LATER_PROJECT_COPYRIGHT, post_root)
+        self.assertNotIn(ORIGINAL_PROJECT_COPYRIGHT, post_root)
+        for text in (modified, modified_test):
+            self.assertIn(ORIGINAL_PROJECT_COPYRIGHT, text)
+            self.assertIn(LATER_PROJECT_COPYRIGHT, text)
+
+        notice = (ROOT / "NOTICE").read_text(encoding="utf-8")
+        self.assertIn("Copyright 2026 SK TELECOM CO., LTD.", notice)
+        self.assertIn("Copyright 2026 hemaher0", notice)
+        self.assertIn("Subsequent modifications were developed by hemaher0.", notice)
+
+        contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+        self.assertNotIn("Changes by SK Telecom employees", contributing)
+        self.assertNotIn("Use an SK Telecom company email", contributing)
+        self.assertIn("Developer Certificate of Origin", contributing)
 
     def test_commentable_files_have_spdx_tags(self) -> None:
         candidates = []

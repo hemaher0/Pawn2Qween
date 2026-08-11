@@ -18,6 +18,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Tag-only GitHub Release automation with separate stable and latest prerelease
   channels.
 - Release validation for project versions and version-specific changelog notes.
+- Repository-wide public-disclosure policy and local Codex review gates for
+  commits, pushes, OpenSpec archives, and releases.
 
 ### Changed
 

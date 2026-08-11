@@ -16,13 +16,21 @@ context: |
 rules:
   proposal:
     - State explicit non-goals when runtime, scoring, or release scope could be ambiguous.
+    - Record public-disclosure scope and exclusions in every proposal.
   specs:
     - Include testable failure and safety scenarios for release or automation changes.
+    - Keep public specifications understandable without confidential local references.
   tasks:
     - Order migration tasks so consumers move before legacy files are removed.
+    - Include a final public-disclosure review before integration or publication.
 
 operations:
   apply:
     guidance:
       - Run focused tests before repository-wide verification.
       - Keep runtime and challenge behavior unchanged unless a spec explicitly changes it.
+      - During apply, preserve the public-disclosure boundary defined in CONTRIBUTING.md.
+      - Run deterministic checks and verify the public-disclosure boundary before reporting success.
+  archive:
+    guidance:
+      - Before archive, review synced specs and retained history for public disclosure.

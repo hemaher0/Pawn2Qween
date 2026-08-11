@@ -1,5 +1,7 @@
 <!--
 SPDX-FileCopyrightText: Copyright 2026 SK TELECOM CO., LTD.
+SPDX-FileCopyrightText: Copyright 2026 hemaher0
+
 SPDX-License-Identifier: Apache-2.0
 -->
 
@@ -10,21 +12,14 @@ SPDX-License-Identifier: Apache-2.0
 This repository does not accept external contributions. Unsolicited patches
 and pull requests will not be reviewed or merged.
 
-## Internal changes and DCO
-
-Changes by SK Telecom employees must be made within the approvals applicable
-to this project and follow the
-[SK Telecom Open Source Contribution Rule](https://sktelecom.github.io/guide/contribute/rule/)
-and
-[contribution process](https://sktelecom.github.io/guide/contribute/process/).
-Use an SK Telecom company email address for commit authorship and sign-off.
+## Maintainer changes and DCO
 
 Every commit must certify the
 [Developer Certificate of Origin 1.1](https://developercertificate.org/)
 with the contributor's own sign-off:
 
 ```text
-Signed-off-by: Your Name <your.company.email@example.com>
+Signed-off-by: Your Name <your.email@example.com>
 ```
 
 Use:
@@ -36,6 +31,34 @@ git commit --signoff
 Do not sign off for another person. This project uses DCO, not a Contributor
 License Agreement. Changes accepted into the repository are licensed under
 Apache-2.0 unless a file states otherwise.
+
+## Public disclosure
+
+Every artifact considered for a public commit or release, including code,
+documentation, data, CI configuration, release artifacts, and OpenSpec
+artifacts, must satisfy all of these conditions:
+
+- its authorship, source, and redistribution rights are established;
+- it is safe to disclose outside its original working context; and
+- it has durable value for understanding, reviewing, reproducing, operating,
+  or maintaining the public project.
+
+Do not publish credentials, personal data, internal locations or
+infrastructure, and non-public URLs. Also exclude private evaluation inputs or
+results, embargoed vulnerability details, raw AI conversation or reasoning
+records, confidential business material, and third-party material without
+established redistribution rights.
+
+If authorship, redistribution rights, confidentiality, or disclosure timing is
+uncertain, the material must remain non-public until the uncertainty is
+resolved. A sanitized public decision may preserve a durable conclusion or
+general risk only when it cannot disclose or reconstruct the excluded source
+information.
+
+Non-public working evidence may remain in the ignored local `references/`
+workspace. Ignoring a path is not a disclosure approval: verify that the file
+is not staged or tracked, and keep every public artifact understandable without
+linking to inaccessible confidential details.
 
 ## Clean-room and data boundary
 

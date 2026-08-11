@@ -51,6 +51,19 @@ When externally observable behavior changes:
 
 Do not create release notes for purely internal changes unless required by the repository release process.
 
+## Public Disclosure Review
+
+- Apply the canonical public-disclosure policy in `CONTRIBUTING.md` to every artifact considered for a public repository or release.
+- Before Codex prepares or executes a commit, push, OpenSpec archive, or release, the active local Codex session must review the applicable public candidate and relevant deterministic check results.
+- Review the staged diff before a commit.
+- Review commits present locally but absent from the target upstream before a push.
+- Review the change artifacts, affected implementation delta, synced specs, and retained archive before an OpenSpec archive.
+- Review the tagged tree, release notes, and release assets before a release.
+- Report exactly one verdict: `PASS`, `BLOCK`, or `NEEDS_CONFIRMATION`. For either non-passing verdict, pause the publication action until the finding is remediated or the missing authority is supplied and re-evaluated.
+- Findings must identify scope, location, sanitized reason, and required action, but must not repeat discovered secret values or unnecessarily reproduce prohibited content.
+- Perform semantic review in the active local Codex session. Do not add a separate AI API, AI credential, external semantic-review service, or AI-backed GitHub Actions job.
+- Direct Git operations performed without Codex are not automatically semantically reviewed; deterministic local and CI checks remain the backstop.
+
 ## Git and Repository Safety
 
 Never:

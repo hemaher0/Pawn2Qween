@@ -213,6 +213,30 @@ class RepositoryPolicyTest(unittest.TestCase):
             [], sorted(_missing_semantic_markers(instructions, required_markers))
         )
 
+    def test_ai_working_artifacts_stay_in_references(self) -> None:
+        instructions = _normalized_document(ROOT / "AGENTS.md")
+        required_markers = (
+            "## AI Working Artifacts",
+            "`references/**`",
+            "designs, implementation plans, notes, logs, reports, diagnostics, generated files, temporary harnesses, and experiments",
+            "`docs/` is reserved for published project documentation",
+            "OpenSpec artifacts remain under `openspec/`",
+            "Do not create or commit `docs/superpowers/`",
+        )
+        self.assertEqual(
+            [], sorted(_missing_semantic_markers(instructions, required_markers))
+        )
+        superpowers_files = sorted(
+            path
+            for path in (ROOT / "docs" / "superpowers").rglob("*")
+            if path.is_file()
+        )
+        self.assertEqual(
+            [],
+            superpowers_files,
+            "AI working artifacts must not be stored under docs/superpowers",
+        )
+
     def test_openspec_and_ci_keep_disclosure_review_local(self) -> None:
         ignored = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
         self.assertIn("/references", ignored)

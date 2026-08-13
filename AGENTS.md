@@ -10,6 +10,14 @@ SPDX-License-Identifier: Apache-2.0
 - Use installed Superpowers skills for implementation, debugging, TDD, and verification when applicable.
 - Do not duplicate detailed workflows here when an existing skill already defines them.
 
+## AI Working Artifacts
+
+- Use the ignored `references/**` workspace for AI-authored working artifacts, including designs, implementation plans, notes, logs, reports, diagnostics, generated files, temporary harnesses, and experiments.
+- `docs/` is reserved for published project documentation with durable value to users or maintainers.
+- Canonical artifacts owned by another workflow stay in that workflow's configured location; OpenSpec artifacts remain under `openspec/`.
+- Do not create or commit `docs/superpowers/`, even when an installed skill names that path as its default. These project instructions override skill defaults.
+- Before committing or pushing, verify that AI working artifacts are absent from the public diff and commit history, not merely deleted from the final tree.
+
 ## Before Changing Code
 
 - Read the relevant OpenSpec change or spec first when one exists.

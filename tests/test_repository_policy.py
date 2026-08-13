@@ -74,6 +74,7 @@ REQUIRED_FILES = {
     "schemas/policy.v1.schema.json",
     "schemas/submission.v1.schema.json",
     "schemas/technical-submission.v1.schema.json",
+    "scripts/build-arm64.sh",
     "src/ossp_router/cli.py",
     "src/ossp_router/heuristic.py",
     "src/ossp_router/image_evidence.py",
@@ -235,6 +236,56 @@ class RepositoryPolicyTest(unittest.TestCase):
         self.assertNotIn("gh release", workflow)
         self.assertIn("contents: read", workflow)
         self.assertIn("cancel-in-progress: true", workflow)
+
+    def test_ci_workflow_builds_arm64_image_without_publishing(self) -> None:
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        script = (ROOT / "scripts/build-arm64.sh").read_text(encoding="utf-8")
+
+        marker = "\n  arm64-image:\n"
+        self.assertIn(marker, workflow)
+        arm64_job = workflow.split(marker, maxsplit=1)[1]
+
+        action_refs = re.findall(r"(?m)^\s+uses:\s+(\S+)", arm64_job)
+        self.assertEqual(3, len(action_refs))
+        for action_ref in action_refs:
+            action, separator, ref = action_ref.partition("@")
+            self.assertTrue(separator, f"third-party action has no ref: {action}")
+            self.assertRegex(ref, r"\A[0-9a-f]{40}\Z")
+
+        self.assertTrue(any(ref.startswith("actions/checkout@") for ref in action_refs))
+        self.assertTrue(
+            any(ref.startswith("docker/setup-qemu-action@") for ref in action_refs)
+        )
+        self.assertTrue(
+            any(ref.startswith("docker/setup-buildx-action@") for ref in action_refs)
+        )
+
+        positions = [
+            arm64_job.index("actions/checkout@"),
+            arm64_job.index("docker/setup-qemu-action@"),
+            arm64_job.index("docker/setup-buildx-action@"),
+            arm64_job.index("./scripts/build-arm64.sh"),
+        ]
+        self.assertEqual(sorted(positions), positions)
+
+        self.assertIn("contents: read", workflow)
+        for forbidden in (
+            "contents: write",
+            "packages: write",
+            "docker/login-action",
+            "actions/upload-artifact",
+            "gh release",
+            "--push",
+        ):
+            self.assertNotIn(forbidden, arm64_job)
+
+        self.assertTrue(script.startswith("#!/usr/bin/env bash\n"))
+        self.assertIn(LATER_PROJECT_COPYRIGHT, script)
+        self.assertIn(LICENSE_TAG + " Apache-2.0", script)
+        self.assertIn("--platform linux/arm64", script)
+        self.assertIn("--load", script)
+        self.assertIn("docker image inspect", script)
+        self.assertIn('if [[ "$ARCH" != "arm64" ]]', script)
 
     def test_release_workflow_is_tag_only_and_preserves_stable_latest(self) -> None:
         path = ROOT / ".github/workflows/release.yml"

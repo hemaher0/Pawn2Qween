@@ -27,7 +27,7 @@ SPDX-License-Identifier: Apache-2.0
   confirming both pass after the implementation.
 - [x] 3.2 Run strict OpenSpec validation, lock consistency, Ruff, REUSE, the
   supported local unit test suite, and package construction.
-- [ ] 3.3 Run the ARM64 build when a Docker daemon is available; otherwise
+- [x] 3.3 Run the ARM64 build when a Docker daemon is available; otherwise
   record the environment limitation and use the first pull-request CI run as
   the cross-platform build evidence.
 - [x] 3.4 Review the final diff for scope, immutable action pins, accidental

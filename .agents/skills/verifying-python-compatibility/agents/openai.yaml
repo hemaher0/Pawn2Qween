@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: Copyright 2026 hemaher0
+# SPDX-License-Identifier: Apache-2.0
+
+interface:
+  display_name: "Verify Python Compatibility"
+  short_description: "Run evidence-selected unittests on Python 3.9 and 3.11"
+  default_prompt: "Use $verifying-python-compatibility to verify this repository change on both supported Python versions."

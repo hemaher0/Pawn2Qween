@@ -14,6 +14,9 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Added
 
+- A pinned multilingual E5 ONNX encoder, deterministic aggregate rank-two
+  compatibility head, reproducible Train-only artifacts, and an offline model
+  fetch workflow.
 - GitHub Actions quality and supported-Python test gates for changes to `main`.
 - Tag-only GitHub Release automation with separate stable and latest prerelease
   channels.
@@ -23,6 +26,9 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Changed
 
+- Routing quality can now compose the independent binomial hash-regex signal
+  with E5 prompt/model compatibility using a fixed equal-logit blend; existing
+  cost prediction and budget-aware allocation remain unchanged.
 - Consolidated Python packaging and task dependencies into `pyproject.toml` and
   a committed uv lock file.
 - Corrected project copyright notices to preserve the original attribution and

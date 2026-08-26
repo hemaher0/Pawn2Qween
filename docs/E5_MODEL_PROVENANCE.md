@@ -1,0 +1,114 @@
+<!--
+SPDX-FileCopyrightText: Copyright 2026 hemaher0
+SPDX-License-Identifier: Apache-2.0
+-->
+
+# E5 model provenance and reproduction
+
+## Upstream model
+
+The E5 compatibility component uses the upstream FP32 ONNX export from
+[`intfloat/multilingual-e5-small`](https://huggingface.co/intfloat/multilingual-e5-small).
+The model repository declares the MIT license. Runtime files are pinned to the
+immutable revision below; the model bytes are downloaded separately and are
+not committed to this repository.
+
+```text
+model: intfloat/multilingual-e5-small
+revision: fd1525a9fd15316a2d503bf26ab031a61d056e98
+license: MIT
+```
+
+| Upstream path | Size | SHA-256 |
+| --- | ---: | --- |
+| `onnx/model.onnx` | 470,268,510 bytes | `ca456c06b3a9505ddfd9131408916dd79290368331e7d76bb621f1cba6bc8665` |
+| `onnx/tokenizer.json` | 17,082,730 bytes | `0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39` |
+
+The repository does not convert, quantize, or re-export the ONNX graph. The
+fetch tool streams both files from the exact revision, checks their sizes and
+SHA-256 values, and publishes them to the requested local directory only after
+verification succeeds.
+
+```console
+python tools/fetch_e5_model.py \
+  --spec configs/e5-model.v1.json \
+  --output build/e5-model
+```
+
+## Preprocessing identity
+
+The aggregate compatibility artifact binds the model bytes to preprocessing
+identity `e5-query-head-tail-mean-pool-l2-v1`:
+
+1. tokenize canonical prompt content without special tokens;
+2. retain all content through 480 tokens, otherwise retain the first 240 and
+   last 240 content tokens;
+3. prepend `query: ` and add the tokenizer's special tokens;
+4. run the pinned ONNX model with a maximum sequence length of 512;
+5. mean-pool the last hidden state over positions selected by the attention
+   mask; and
+6. L2-normalize the resulting 384-dimensional FP32 vector.
+
+The encoder runs with ONNX Runtime's `CPUExecutionProvider`, sequential graph
+execution, two intra-op threads, and one inter-op thread. Runtime inference
+does not download files or access outcomes.
+
+## Runtime dependencies
+
+The tested runtime dependency set is:
+
+- NumPy 2.0.2, BSD-3-Clause;
+- ONNX Runtime 1.28.0, MIT; and
+- tokenizers 0.22.2, Apache-2.0.
+
+PyTorch is used only for offline fitting of the two-dimensional aggregate
+compatibility head. It is not imported by the runtime router.
+
+## Reproducing aggregate artifacts
+
+First materialize content-aligned ONNX vectors. The archive is a local build
+artifact and is not committed.
+
+```console
+PYTHONPATH=src:. python baselines/train_e5_binomial_router.py encode \
+  --train-input data/materialized/train/inputs.json \
+  --dev-input data/materialized/dev/inputs.json \
+  --model-spec configs/e5-model.v1.json \
+  --model-dir build/e5-model \
+  --output build/e5-bilinear/onnx-features.npz
+```
+
+Then fit the Train-only binomial and rank-two compatibility artifacts on one
+CUDA device. The publication command fixes the retained seed, rank, optimizer,
+step count, regularization, and blend weight; it exposes no tuning flags.
+
+```console
+PYTHONPATH=src:. python baselines/train_e5_binomial_router.py fit \
+  --train-input data/materialized/train/inputs.json \
+  --train-outcomes data/train/outcomes.json \
+  --features build/e5-bilinear/onnx-features.npz \
+  --hash-artifact baselines/hash-regex-public.v1.json \
+  --binomial-output baselines/binomial-logistic-quality-public.v1.json \
+  --compatibility-output baselines/e5-bilinear-compatibility-public.v1.json
+```
+
+The committed artifacts contain only aggregate parameters and Train
+provenance. They do not contain prompts, identifiers, per-row embeddings,
+outcomes, answers, or predictions.
+
+## Offline execution
+
+The runtime requires the verified model directory and the three aggregate
+router artifacts. It derives both quality signals from prompt content, reuses
+the hash-regex cost predictions, and delegates selection to the existing
+cost-aware allocator.
+
+```console
+PYTHONPATH=src:. python baselines/e5_binomial_router.py \
+  --input input.json \
+  --tier balanced \
+  --model-dir build/e5-model \
+  --output submission.json
+```
+
+No runtime network access is required.

@@ -120,7 +120,7 @@ artifact and is not committed.
 
 ```console
 uv run --locked --no-dev --group e5-runtime \
-  python baselines/train_e5_binomial_router.py encode \
+  router-train encode \
   --train-input data/materialized/train/inputs.json \
   --dev-input data/materialized/dev/inputs.json \
   --model-spec configs/e5-model.v1.json \
@@ -134,7 +134,7 @@ step count, regularization, and blend weight; it exposes no tuning flags.
 
 ```console
 uv run --locked --no-dev --group e5-train \
-  python baselines/train_e5_binomial_router.py fit \
+  router-train fit \
   --train-input data/materialized/train/inputs.json \
   --train-outcomes data/train/outcomes.json \
   --features build/e5-training/onnx-features.npz \

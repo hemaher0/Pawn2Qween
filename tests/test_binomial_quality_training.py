@@ -5,28 +5,11 @@ from __future__ import annotations
 
 import importlib.util
 import math
-import pathlib
-import sys
 import unittest
 
+from ossp_router.training import binomial_quality as quality
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
 NUMPY_AVAILABLE = importlib.util.find_spec("numpy") is not None
-
-
-def _load_module(name, path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-quality = _load_module(
-    "binomial_logistic_quality",
-    ROOT / "baselines/binomial_logistic_quality.py",
-)
 
 
 class BinomialLogisticQualityTest(unittest.TestCase):

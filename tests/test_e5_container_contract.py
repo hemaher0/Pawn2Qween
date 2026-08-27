@@ -71,6 +71,10 @@ class E5ContainerContractTest(unittest.TestCase):
         self.assertIn("org.opencontainers.image.revision", dockerfile)
         self.assertIn("org.opencontainers.image.source", dockerfile)
 
+        dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+        self.assertIn("src/ossp_router/**", dockerignore)
+        self.assertNotIn("!src/ossp_router/training", dockerignore)
+
         entrypoint = (ROOT / "container/entrypoint.py").read_text(encoding="utf-8")
         self.assertIn("from ossp_router.e5_router import main", entrypoint)
         self.assertNotIn("from baselines", entrypoint)

@@ -10,9 +10,9 @@ import pathlib
 import tempfile
 import unittest
 
-from baselines import e5_artifact_publication as publication
 from ossp_router import e5_artifact as compatibility
 from ossp_router.protocol import MODEL_IDS
+from ossp_router.training import artifact_publication as publication
 
 
 def _model() -> compatibility.E5BilinearCompatibilityModel:

@@ -14,12 +14,8 @@ from typing import Mapping, Sequence, Tuple
 
 import numpy as np
 
-from baselines import binomial_logistic_quality as binomial
-from baselines import e5_artifact_publication as publication
-from baselines import e5_training_features as feature_io
-from baselines import e5_training_fit as fitting
-from baselines import hash_regex
 from ossp_router import e5_artifact as compatibility
+from ossp_router.hash_router import predict_episode
 from ossp_router.heuristic import episode_text
 from ossp_router.protocol import (
     MODEL_IDS,
@@ -34,6 +30,17 @@ from ossp_router.protocol import (
     load_outcomes,
 )
 from ossp_router.scoring import score_submissions
+from ossp_router.routing_allocator import (
+    PREMIUM_AX31_FILL_SAFETY_RATIO,
+    fill_ax31_upgrades,
+    select_models,
+)
+from ossp_router.routing_artifacts import HashRegexArtifact, load_hash_artifact
+
+from . import artifact_publication as publication
+from . import binomial_quality as binomial
+from . import e5_features as feature_io
+from . import e5_fit as fitting
 
 
 _NUMBER = re.compile(r"\d+")
@@ -73,36 +80,36 @@ def _predict_blended_rows(
 
 def _predicted_costs(
     inputs: InputBatch,
-    artifact: hash_regex.HashRegexArtifact,
+    artifact: HashRegexArtifact,
 ) -> Tuple[Mapping[str, float], ...]:
     return tuple(
-        hash_regex.predict_episode(episode, artifact)[1] for episode in inputs.episodes
+        predict_episode(episode, artifact)[1] for episode in inputs.episodes
     )
 
 
 def _route_all_tiers(
     inputs: InputBatch,
     policy: RoutingPolicy,
-    artifact: hash_regex.HashRegexArtifact,
+    artifact: HashRegexArtifact,
     scores: Sequence[Mapping[str, float]],
     costs: Sequence[Mapping[str, float]],
 ) -> tuple[Tuple[Submission, ...], Mapping[str, float]]:
     submissions = []
     predicted_ratios = {}
     for tier in TIERS:
-        selected, ratio = hash_regex.select_models(
+        selected, ratio = select_models(
             scores,
             costs,
             budget_multiplier=float(policy.tiers[tier].budget_multiplier),
             safety_ratio=artifact.tier_safety_ratios[tier],
         )
         if tier == "premium":
-            selected, ratio = hash_regex.fill_ax31_upgrades(
+            selected, ratio = fill_ax31_upgrades(
                 selected,
                 scores,
                 costs,
                 budget_multiplier=float(policy.tiers[tier].budget_multiplier),
-                safety_ratio=hash_regex.PREMIUM_AX31_FILL_SAFETY_RATIO,
+                safety_ratio=PREMIUM_AX31_FILL_SAFETY_RATIO,
             )
         submissions.append(
             Submission(
@@ -160,7 +167,7 @@ def _fit_oof_surfaces(
     train_quality: np.ndarray,
     train_generations: np.ndarray,
     train_embeddings: np.ndarray,
-    hash_artifact: hash_regex.HashRegexArtifact,
+    hash_artifact: HashRegexArtifact,
     *,
     train_input_sha256: str,
     train_outcome_sha256: str,
@@ -270,7 +277,7 @@ def _evaluate_command(args: argparse.Namespace) -> None:
     """Evaluate the fixed artifacts without exposing Dev outcomes before routing."""
 
     policy = load_bundled_policy()
-    hash_artifact = hash_regex.load_artifact(args.hash_artifact)
+    hash_artifact = load_hash_artifact(args.hash_artifact)
     binomial_model = binomial.parse_artifact(
         json.loads(args.binomial_artifact.read_text(encoding="utf-8"))
     )

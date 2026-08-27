@@ -26,6 +26,7 @@ src/ossp_router/**
 !src/ossp_router/e5_artifact.py
 !src/ossp_router/e5_encoder.py
 !src/ossp_router/e5_router.py
+!src/ossp_router/hash_router.py
 !src/ossp_router/heuristic.py
 !src/ossp_router/protocol.py
 !src/ossp_router/routing_allocator.py
@@ -43,7 +44,6 @@ src/ossp_router/resources/**
 !baselines/
 baselines/**
 !baselines/feature_budget.py
-!baselines/hash_regex.py
 !build/
 build/**
 !build/e5-model/

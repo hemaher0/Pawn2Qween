@@ -12,7 +12,6 @@ import hashlib
 import json
 import math
 import os
-import sys
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
@@ -22,7 +21,7 @@ try:
 except ImportError:  # pragma: no cover - exercised by the CLI error path
     np = None
 
-import hash_regex
+from ossp_router import hash_router
 from ossp_router.protocol import (
     MODEL_IDS,
     TIERS,
@@ -33,13 +32,21 @@ from ossp_router.protocol import (
     ProtocolError,
     RoutingPolicy,
     Submission,
-    load_bundled_policy,
     load_input,
     load_outcomes,
-    load_policy,
     policy_sha256,
 )
 from ossp_router.scoring import score_submissions
+from ossp_router.routing_artifacts import (
+    HASH_ARTIFACT_TYPE,
+    HASH_FEATURE_VERSION,
+    HashRegexArtifact,
+    parse_hash_artifact,
+)
+from ossp_router.routing_features import (
+    DENSE_FEATURE_NAMES,
+    raw_feature_vector,
+)
 
 
 def _require_numpy() -> None:
@@ -96,7 +103,7 @@ def _training_matrix(
         raise ProtocolError("Train outcome 행렬이 입력과 모델 전체를 포함하지 않습니다.")
     matrix = np.asarray(
         [
-            hash_regex.raw_feature_vector(episode, hash_bins)
+            raw_feature_vector(episode, hash_bins)
             for episode in inputs.episodes
         ],
         dtype=np.float64,
@@ -271,7 +278,7 @@ def _select_safety_ratios(
     for tier in TIERS:
         best = None
         for safety in _safety_candidates(policy, tier, grid_size):
-            selected, predicted_ratio = hash_regex.select_models(
+            selected, predicted_ratio = hash_router.select_models(
                 predicted_scores,
                 predicted_costs,
                 budget_multiplier=float(policy.tiers[tier].budget_multiplier),
@@ -320,7 +327,7 @@ def _validate_fitted_safety_ratios(
         }
         chosen = None
         for safety in sorted(candidates, reverse=True):
-            selected, predicted_ratio = hash_regex.select_models(
+            selected, predicted_ratio = hash_router.select_models(
                 predicted_scores,
                 predicted_costs,
                 budget_multiplier=float(policy.tiers[tier].budget_multiplier),
@@ -348,7 +355,7 @@ def _calibrate_validation_safety_ratios(
     inputs: InputBatch,
     outcomes: OutcomeBatch,
     policy: RoutingPolicy,
-    artifact: hash_regex.HashRegexArtifact,
+    artifact: HashRegexArtifact,
     grid_size: int,
 ) -> Tuple[Mapping[str, float], Mapping[str, Any]]:
     if inputs.schema_version != outcomes.schema_version:
@@ -356,7 +363,7 @@ def _calibrate_validation_safety_ratios(
     if inputs.challenge_id != outcomes.challenge_id or inputs.split != outcomes.split:
         raise ProtocolError("Dev 입력과 outcome의 실행 메타데이터가 다릅니다.")
     predictions = [
-        hash_regex.predict_episode(episode, artifact) for episode in inputs.episodes
+        hash_router.predict_episode(episode, artifact) for episode in inputs.episodes
     ]
     predicted_scores = [item[0] for item in predictions]
     predicted_costs = [item[1] for item in predictions]
@@ -365,7 +372,7 @@ def _calibrate_validation_safety_ratios(
     for tier in TIERS:
         best = None
         for safety in _safety_candidates(policy, tier, grid_size):
-            selected, predicted_ratio = hash_regex.select_models(
+            selected, predicted_ratio = hash_router.select_models(
                 predicted_scores,
                 predicted_costs,
                 budget_multiplier=float(policy.tiers[tier].budget_multiplier),
@@ -414,12 +421,12 @@ def _artifact_dict(
 ) -> Mapping[str, Any]:
     model_count = len(MODEL_IDS)
     return {
-        "artifact_type": hash_regex.ARTIFACT_TYPE,
+        "artifact_type": HASH_ARTIFACT_TYPE,
         "schema_version": 1,
-        "feature_version": hash_regex.FEATURE_VERSION,
+        "feature_version": HASH_FEATURE_VERSION,
         "hash_algorithm": "fnv1a64-signed-word-1-2",
         "hash_bins": hash_bins,
-        "dense_feature_names": list(hash_regex.DENSE_FEATURE_NAMES),
+        "dense_feature_names": list(DENSE_FEATURE_NAMES),
         "model_ids": list(MODEL_IDS),
         "policy_id": policy.policy_id,
         "policy_sha256": policy_sha256(policy),
@@ -552,7 +559,7 @@ def train(
     if validation_input_path is not None and validation_outcomes_path is not None:
         validation_inputs = load_input(validation_input_path)
         validation_outcomes = load_outcomes(validation_outcomes_path)
-        initial_artifact = hash_regex.parse_artifact(initial_artifact_value)
+        initial_artifact = parse_hash_artifact(initial_artifact_value)
         safety_ratios, validation_reports = _calibrate_validation_safety_ratios(
             validation_inputs,
             validation_outcomes,
@@ -579,9 +586,9 @@ def train(
         safety_ratios=safety_ratios,
         training_summary=training_summary,
     )
-    artifact = hash_regex.parse_artifact(artifact_value)
+    artifact = parse_hash_artifact(artifact_value)
     submissions = [
-        hash_regex.make_hash_regex_submission(inputs, policy, artifact, tier).submission
+        hash_router.make_hash_submission(inputs, policy, artifact, tier).submission
         for tier in TIERS
     ]
     fitted_report = score_submissions(inputs, outcomes, submissions, policy)
@@ -603,7 +610,7 @@ def train(
     return report
 
 
-def _positive_float_list(value: str) -> Tuple[float, ...]:
+def positive_float_list(value: str) -> Tuple[float, ...]:
     try:
         result = tuple(float(item) for item in value.split(","))
     except ValueError as exc:
@@ -611,60 +618,3 @@ def _positive_float_list(value: str) -> Tuple[float, ...]:
     if not result or any(not math.isfinite(item) or item <= 0 for item in result):
         raise argparse.ArgumentTypeError("alpha는 0보다 큰 유한한 수여야 합니다.")
     return result
-
-
-def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="공개 Train으로 regex·feature-hashing 선형 라우터를 학습합니다."
-    )
-    parser.add_argument("--input", type=Path, required=True)
-    parser.add_argument("--outcomes", type=Path, required=True)
-    parser.add_argument("--artifact", type=Path, required=True)
-    parser.add_argument("--report", type=Path, required=True)
-    parser.add_argument("--validation-input", type=Path)
-    parser.add_argument("--validation-outcomes", type=Path)
-    parser.add_argument("--policy", type=Path)
-    parser.add_argument("--hash-bins", type=int, default=hash_regex.DEFAULT_HASH_BINS)
-    parser.add_argument("--folds", type=int, default=5)
-    parser.add_argument(
-        "--alphas",
-        type=_positive_float_list,
-        default=_positive_float_list("0.1,1,10,100"),
-    )
-    parser.add_argument("--safety-grid-size", type=int, default=121)
-    return parser
-
-
-def main(argv: Optional[Sequence[str]] = None) -> int:
-    args = _parser().parse_args(argv)
-    try:
-        policy = (
-            load_policy(args.policy)
-            if args.policy is not None
-            else load_bundled_policy()
-        )
-        report = train(
-            input_path=args.input,
-            outcomes_path=args.outcomes,
-            artifact_path=args.artifact,
-            report_path=args.report,
-            policy=policy,
-            hash_bins=args.hash_bins,
-            requested_folds=args.folds,
-            alpha_candidates=args.alphas,
-            safety_grid_size=args.safety_grid_size,
-            validation_input_path=args.validation_input,
-            validation_outcomes_path=args.validation_outcomes,
-        )
-    except (OSError, ProtocolError, RuntimeError, ValueError) as exc:
-        print(f"오류: {exc}", file=sys.stderr)
-        return 2
-    print(
-        "OK: hash-regex artifact를 생성했습니다 "
-        f"(Train self-check {report['fitted_train_self_check']['final_score']})."
-    )
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

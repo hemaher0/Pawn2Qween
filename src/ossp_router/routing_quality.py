@@ -12,7 +12,9 @@ from .e5_artifact import (
     blend_quality_logits,
     predict_compatibility_logits,
 )
-from .routing_artifacts import BinomialLogisticQualityModel
+from .protocol import MODEL_IDS, Episode
+from .routing_artifacts import BinomialLogisticQualityModel, HashRegexArtifact
+from .routing_costs import standardized_features
 
 
 def _finite_vector(
@@ -84,8 +86,35 @@ def predict_binomial_quality(
     return prediction
 
 
+def predict_hash_quality(
+    episode: Episode,
+    artifact: HashRegexArtifact,
+) -> Mapping[str, float]:
+    """Predict bounded per-model quality from the hash feature heads."""
+
+    features = standardized_features(episode, artifact)
+    return {
+        model_id: min(
+            1.0,
+            max(
+                0.0,
+                artifact.score_heads[model_id].intercept
+                + math.fsum(
+                    coefficient * value
+                    for coefficient, value in zip(
+                        artifact.score_heads[model_id].coefficients,
+                        features,
+                    )
+                ),
+            ),
+        )
+        for model_id in MODEL_IDS
+    }
+
+
 __all__ = (
     "blend_quality_logits",
     "predict_binomial_quality",
     "predict_compatibility_logits",
+    "predict_hash_quality",
 )

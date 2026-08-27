@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright 2026 hemaher0
 # SPDX-License-Identifier: Apache-2.0
 
-"""Fit and run independent binomial logistic quality heads."""
+"""Fit and run independent binomial logistic quality heads offline."""
 
 from __future__ import annotations
 

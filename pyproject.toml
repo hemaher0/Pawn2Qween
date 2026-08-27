@@ -25,6 +25,7 @@ router-measure-image = "ossp_router.image_evidence:main"
 router-measure-tiebreak = "ossp_router.tiebreak_latency:main"
 router-run = "ossp_router.e5_router:main"
 router-self-check = "ossp_router.cli:self_check_entry"
+router-train = "ossp_router.training.cli:main"
 
 [dependency-groups]
 dev = [
@@ -40,7 +41,7 @@ e5-runtime = [
   "tokenizers==0.22.2",
 ]
 e5-train = [
-  {include-group = "e5-runtime"},
+  "numpy==2.0.2",
   "scikit-learn==1.7.2",
   "torch==2.8.0; sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
@@ -57,7 +58,7 @@ deepmind = [
 [tool.setuptools]
 include-package-data = true
 package-dir = {"" = "src"}
-packages = ["ossp_router", "ossp_router.resources"]
+packages = ["ossp_router", "ossp_router.resources", "ossp_router.training"]
 
 [tool.setuptools.package-data]
 "ossp_router.resources" = ["*.json"]

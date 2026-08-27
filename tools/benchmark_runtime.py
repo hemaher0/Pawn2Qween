@@ -115,12 +115,13 @@ if strategy == "feature-budget":
         inputs, policy, sys.argv[2]
     ).submission
 elif strategy == "hash-regex":
-    from hash_regex import load_artifact, make_hash_regex_submission
+    from ossp_router.hash_router import make_hash_submission
+    from ossp_router.routing_artifacts import load_hash_artifact
 
-    artifact = load_artifact(
-        Path("/opt/router/baselines/hash-regex-public.v1.json")
+    artifact = load_hash_artifact(
+        Path("/opt/router/ossp_router/resources/hash-regex-public.v1.json")
     )
-    submission = make_hash_regex_submission(
+    submission = make_hash_submission(
         inputs, policy, artifact, sys.argv[2]
     ).submission
 else:
@@ -176,12 +177,13 @@ def _worker(args: argparse.Namespace) -> int:
                 inputs, policy, args.tier
             ).submission
         else:
-            from hash_regex import load_artifact, make_hash_regex_submission
+            from ossp_router.hash_router import make_hash_submission
+            from ossp_router.routing_artifacts import load_hash_artifact
 
-            artifact = load_artifact(
+            artifact = load_hash_artifact(
                 ROOT / "src/ossp_router/resources/hash-regex-public.v1.json"
             )
-            submission = make_hash_regex_submission(
+            submission = make_hash_submission(
                 inputs, policy, artifact, args.tier
             ).submission
     else:

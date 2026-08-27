@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright 2026 hemaher0
 # SPDX-License-Identifier: Apache-2.0
 
-"""Run the aggregate E5 rank-two compatibility model."""
+"""Validate and run the aggregate E5 rank-two compatibility artifact."""
 
 from __future__ import annotations
 

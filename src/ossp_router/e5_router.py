@@ -12,24 +12,25 @@ import hashlib
 import json
 import sys
 from dataclasses import dataclass
+from importlib import resources
 from pathlib import Path
 from typing import Optional, Sequence, Tuple
 
-
-ROOT = Path(__file__).resolve().parents[1]
-for import_root in (ROOT, ROOT / "src"):
-    if str(import_root) not in sys.path:
-        sys.path.insert(0, str(import_root))
-
-from baselines import binomial_logistic_quality as binomial  # noqa: E402
-from baselines import e5_bilinear_compatibility as compatibility  # noqa: E402
-from baselines import e5_onnx_encoder  # noqa: E402
-from baselines import hash_regex  # noqa: E402
-from ossp_router.heuristic import (  # noqa: E402
+from . import e5_encoder
+from . import routing_allocator as allocator
+from . import routing_costs as costs
+from . import routing_features as features
+from . import routing_quality as quality
+from .e5_artifact import (
+    E5BilinearCompatibilityModel,
+    E5EncoderIdentity,
+    load_compatibility_artifact,
+)
+from .heuristic import (
     episode_text,
     write_submission_atomic,
 )
-from ossp_router.protocol import (  # noqa: E402
+from .protocol import (
     MODEL_IDS,
     TIERS,
     Decision,
@@ -44,20 +45,30 @@ from ossp_router.protocol import (  # noqa: E402
     policy_sha256,
     submission_to_dict,
 )
-
-
-DEFAULT_HASH_ARTIFACT = ROOT / "baselines/hash-regex-public.v1.json"
-DEFAULT_BINOMIAL_ARTIFACT = ROOT / "baselines/binomial-logistic-quality-public.v1.json"
-DEFAULT_COMPATIBILITY_ARTIFACT = (
-    ROOT / "baselines/e5-bilinear-compatibility-public.v1.json"
+from .routing_artifacts import (
+    BinomialLogisticQualityModel,
+    HashRegexArtifact,
+    RouterArtifacts,
+    load_binomial_artifact,
+    load_hash_artifact,
 )
-DEFAULT_MODEL_DIR = ROOT / "build/e5-model"
+
+
+RESOURCE_ROOT = resources.files("ossp_router.resources")
+DEFAULT_HASH_ARTIFACT = Path(str(RESOURCE_ROOT.joinpath("hash-regex-public.v1.json")))
+DEFAULT_BINOMIAL_ARTIFACT = Path(
+    str(RESOURCE_ROOT.joinpath("binomial-logistic-quality-public.v1.json"))
+)
+DEFAULT_COMPATIBILITY_ARTIFACT = Path(
+    str(RESOURCE_ROOT.joinpath("e5-bilinear-compatibility-public.v1.json"))
+)
+DEFAULT_MODEL_DIR = Path("build/e5-model")
 _ONNX_SIZE = 470_268_510
 _TOKENIZER_SIZE = 17_082_730
 
 
 @dataclass(frozen=True)
-class E5BinomialPlan:
+class _RoutingResult:
     """One validated submission plus its unchanged allocator diagnostics."""
 
     submission: Submission
@@ -67,18 +78,18 @@ class E5BinomialPlan:
 
 
 def _expected_feature_names(
-    artifact: hash_regex.HashRegexArtifact,
+    artifact: HashRegexArtifact,
 ) -> Tuple[str, ...]:
-    dense = tuple(map(str, hash_regex.DENSE_FEATURE_NAMES))
+    dense = tuple(map(str, features.DENSE_FEATURE_NAMES))
     hashed = tuple(f"signed_hash_{index}" for index in range(artifact.hash_bins))
     return dense + hashed
 
 
 def _validate_components(
     policy: RoutingPolicy,
-    hash_artifact: hash_regex.HashRegexArtifact,
-    binomial_model: binomial.BinomialLogisticQualityModel,
-    compatibility_model: compatibility.E5BilinearCompatibilityModel,
+    hash_artifact: HashRegexArtifact,
+    binomial_model: BinomialLogisticQualityModel,
+    compatibility_model: E5BilinearCompatibilityModel,
     encoder: object,
 ) -> None:
     if hash_artifact.policy_id != policy.policy_id:
@@ -97,15 +108,12 @@ def _validate_components(
         raise ValueError("encoder does not provide content encoding")
 
 
-def make_e5_binomial_submission(
+def _route_with_diagnostics(
     inputs: InputBatch,
     policy: RoutingPolicy,
-    hash_artifact: hash_regex.HashRegexArtifact,
-    binomial_model: binomial.BinomialLogisticQualityModel,
-    compatibility_model: compatibility.E5BilinearCompatibilityModel,
-    encoder: e5_onnx_encoder.E5OnnxEncoder,
     tier: str,
-) -> E5BinomialPlan:
+    artifacts: RouterArtifacts,
+) -> _RoutingResult:
     """Compose quality signals once and use the existing cost-aware allocator."""
 
     if inputs.schema_version != policy.schema_version:
@@ -114,42 +122,44 @@ def make_e5_binomial_submission(
         raise ProtocolError("unknown routing tier")
     _validate_components(
         policy,
-        hash_artifact,
-        binomial_model,
-        compatibility_model,
-        encoder,
+        artifacts.hash_model,
+        artifacts.binomial_model,
+        artifacts.compatibility_model,
+        artifacts.encoder,
     )
     texts = tuple(episode_text(episode) for episode in inputs.episodes)
-    embeddings = encoder.encode_texts(texts)
+    embeddings = artifacts.encoder.encode_texts(texts)
     if len(embeddings) != len(inputs.episodes):
         raise RuntimeError("encoder output does not align with input rows")
 
     combined_quality = []
     predicted_costs = []
     for episode, embedding in zip(inputs.episodes, embeddings):
-        raw_features = hash_regex.raw_feature_vector(
+        raw_features = features.raw_feature_vector(
             episode,
-            hash_artifact.hash_bins,
+            artifacts.hash_model.hash_bins,
         )
-        binomial_quality = binomial.predict_model_qualities(
-            binomial_model,
+        binomial_quality = quality.predict_binomial_quality(
+            artifacts.binomial_model,
             raw_features,
         )
-        compatibility_logits = compatibility.predict_compatibility_logits(
-            compatibility_model,
+        compatibility_logits = quality.predict_compatibility_logits(
+            artifacts.compatibility_model,
             embedding,
         )
         combined_quality.append(
-            compatibility.blend_quality_logits(
+            quality.blend_quality_logits(
                 binomial_quality,
                 compatibility_logits,
-                compatibility_weight=compatibility_model.compatibility_weight,
+                compatibility_weight=(
+                    artifacts.compatibility_model.compatibility_weight
+                ),
             )
         )
-        predicted_costs.append(hash_regex.predict_episode(episode, hash_artifact)[1])
+        predicted_costs.append(costs.predict_costs(episode, artifacts.hash_model))
 
-    safety_ratio = hash_artifact.tier_safety_ratios[tier]
-    selected, predicted_ratio = hash_regex.select_models(
+    safety_ratio = artifacts.hash_model.tier_safety_ratios[tier]
+    selected, predicted_ratio = allocator.select_models(
         combined_quality,
         predicted_costs,
         budget_multiplier=float(policy.tiers[tier].budget_multiplier),
@@ -157,8 +167,8 @@ def make_e5_binomial_submission(
     )
     fill_safety = None
     if tier == "premium":
-        fill_safety = hash_regex.PREMIUM_AX31_FILL_SAFETY_RATIO
-        selected, predicted_ratio = hash_regex.fill_ax31_upgrades(
+        fill_safety = allocator.PREMIUM_AX31_FILL_SAFETY_RATIO
+        selected, predicted_ratio = allocator.fill_ax31_upgrades(
             selected,
             combined_quality,
             predicted_costs,
@@ -176,12 +186,23 @@ def make_e5_binomial_submission(
             for episode, model_id in zip(inputs.episodes, selected)
         ),
     )
-    return E5BinomialPlan(
+    return _RoutingResult(
         submission=parse_submission(submission_to_dict(submission)),
         predicted_budget_ratio=predicted_ratio,
         safety_ratio=safety_ratio,
         ax31_fill_safety_ratio=fill_safety,
     )
+
+
+def route(
+    inputs: InputBatch,
+    policy: RoutingPolicy,
+    tier: str,
+    artifacts: RouterArtifacts,
+) -> Submission:
+    """Route one validated input batch with immutable runtime artifacts."""
+
+    return _route_with_diagnostics(inputs, policy, tier, artifacts).submission
 
 
 def _sha256_file(path: Path) -> str:
@@ -194,8 +215,8 @@ def _sha256_file(path: Path) -> str:
 
 def _load_encoder(
     model_dir: Path,
-    identity: compatibility.E5EncoderIdentity,
-) -> e5_onnx_encoder.E5OnnxEncoder:
+    identity: E5EncoderIdentity,
+) -> e5_encoder.E5OnnxEncoder:
     model_path = model_dir / "onnx/model.onnx"
     tokenizer_path = model_dir / "onnx/tokenizer.json"
     expected = (
@@ -209,7 +230,7 @@ def _load_encoder(
             or _sha256_file(path) != digest
         ):
             raise ValueError("runtime model bytes do not match the artifact identity")
-    return e5_onnx_encoder.E5OnnxEncoder(model_dir, identity=identity)
+    return e5_encoder.E5OnnxEncoder(model_dir, identity=identity)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -242,31 +263,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if args.policy is not None
             else load_bundled_policy()
         )
-        hash_artifact = hash_regex.load_artifact(args.hash_artifact)
-        binomial_model = binomial.parse_artifact(
-            json.loads(args.binomial_artifact.read_text(encoding="utf-8"))
-        )
-        compatibility_model = compatibility.load_compatibility_artifact(
-            args.compatibility_artifact
-        )
+        hash_artifact = load_hash_artifact(args.hash_artifact)
+        binomial_model = load_binomial_artifact(args.binomial_artifact)
+        compatibility_model = load_compatibility_artifact(args.compatibility_artifact)
         encoder = _load_encoder(args.model_dir, compatibility_model.encoder)
-        plan = make_e5_binomial_submission(
+        submission = route(
             inputs,
             policy,
-            hash_artifact,
-            binomial_model,
-            compatibility_model,
-            encoder,
             args.tier,
+            RouterArtifacts(
+                hash_model=hash_artifact,
+                binomial_model=binomial_model,
+                compatibility_model=compatibility_model,
+                encoder=encoder,
+            ),
         )
-        write_submission_atomic(args.output, plan.submission)
+        write_submission_atomic(args.output, submission)
     except (OSError, ProtocolError, RuntimeError, ValueError, json.JSONDecodeError):
         print("error: router initialization or inference failed", file=sys.stderr)
         return 2
-    print(
-        "OK: submission created "
-        f"(predicted cost ratio {plan.predicted_budget_ratio:.6f})"
-    )
+    print("OK: submission created")
     return 0
 
 

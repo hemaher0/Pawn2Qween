@@ -309,9 +309,14 @@ class BenchmarkEvidenceTest(unittest.TestCase):
         self.assertIn("src/ossp_router/runtime.py", paths)
         self.assertIn("baselines/feature_budget.py", paths)
         self.assertIn("baselines/hash_regex.py", paths)
-        self.assertIn("baselines/hash-regex-public.v1.json", paths)
-        self.assertIn("baselines/e5_binomial_router.py", paths)
-        self.assertIn("baselines/e5-bilinear-compatibility-public.v1.json", paths)
+        self.assertIn(
+            "src/ossp_router/resources/hash-regex-public.v1.json", paths
+        )
+        self.assertIn("src/ossp_router/e5_router.py", paths)
+        self.assertIn(
+            "src/ossp_router/resources/e5-bilinear-compatibility-public.v1.json",
+            paths,
+        )
         self.assertNotIn("tools/benchmark_runtime.py", paths)
         self.assertFalse(any(".egg-info/" in path for path in paths))
         self.assertEqual(

@@ -23,7 +23,7 @@ router-cleanup-resources = "ossp_router.runtime:cleanup_main"
 router-evaluate-tier = "ossp_router.orchestrator:main"
 router-measure-image = "ossp_router.image_evidence:main"
 router-measure-tiebreak = "ossp_router.tiebreak_latency:main"
-router-run = "baselines.e5_binomial_router:main"
+router-run = "ossp_router.e5_router:main"
 router-self-check = "ossp_router.cli:self_check_entry"
 
 [dependency-groups]
@@ -51,11 +51,10 @@ deepmind = [
 
 [tool.setuptools]
 include-package-data = true
-package-dir = {"" = "src", "baselines" = "baselines"}
-packages = ["ossp_router", "ossp_router.resources", "baselines"]
+package-dir = {"" = "src"}
+packages = ["ossp_router", "ossp_router.resources"]
 
 [tool.setuptools.package-data]
-"baselines" = ["*.json"]
 "ossp_router.resources" = ["*.json"]
 
 [tool.uv]

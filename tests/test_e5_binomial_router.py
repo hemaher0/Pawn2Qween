@@ -6,7 +6,6 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import io
-import json
 import pathlib
 import subprocess
 import sys
@@ -14,10 +13,13 @@ import unittest
 from contextlib import redirect_stderr
 from unittest import mock
 
-from baselines import binomial_logistic_quality as binomial
-from baselines import e5_bilinear_compatibility as compatibility
-from baselines import e5_binomial_router as router
-from baselines import hash_regex
+from ossp_router import e5_artifact as compatibility
+from ossp_router import e5_router as router
+from ossp_router import routing_allocator as allocator
+from ossp_router import routing_artifacts
+from ossp_router import routing_costs
+from ossp_router import routing_features
+from ossp_router import routing_quality
 from ossp_router.heuristic import episode_text
 from ossp_router.protocol import (
     MODEL_IDS,
@@ -95,18 +97,24 @@ class E5BinomialRouterTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.policy = load_bundled_policy()
-        cls.hash_artifact = hash_regex.load_artifact(
-            ROOT / "baselines/hash-regex-public.v1.json"
+        cls.hash_artifact = routing_artifacts.load_hash_artifact(
+            ROOT / "src/ossp_router/resources/hash-regex-public.v1.json"
         )
-        cls.binomial_model = binomial.parse_artifact(
-            json.loads(
-                (ROOT / "baselines/binomial-logistic-quality-public.v1.json").read_text(
-                    encoding="utf-8"
-                )
-            )
+        cls.binomial_model = routing_artifacts.load_binomial_artifact(
+            ROOT
+            / "src/ossp_router/resources/binomial-logistic-quality-public.v1.json"
         )
         cls.compatibility_model = compatibility.load_compatibility_artifact(
-            ROOT / "baselines/e5-bilinear-compatibility-public.v1.json"
+            ROOT
+            / "src/ossp_router/resources/e5-bilinear-compatibility-public.v1.json"
+        )
+
+    def _artifacts(self, encoder, *, binomial_model=None):
+        return routing_artifacts.RouterArtifacts(
+            hash_model=self.hash_artifact,
+            binomial_model=binomial_model or self.binomial_model,
+            compatibility_model=self.compatibility_model,
+            encoder=encoder,
         )
 
     def test_encodes_content_once_and_composes_quality_with_unchanged_costs(
@@ -132,43 +140,40 @@ class E5BinomialRouterTest(unittest.TestCase):
         selected = (MODEL_IDS[0], MODEL_IDS[2])
         with (
             mock.patch.object(
-                hash_regex, "raw_feature_vector", return_value=raw
+                routing_features, "raw_feature_vector", return_value=raw
             ) as raw_feature,
             mock.patch.object(
-                binomial,
-                "predict_model_qualities",
+                routing_quality,
+                "predict_binomial_quality",
                 return_value=binomial_quality,
             ) as predict_binomial,
             mock.patch.object(
-                compatibility,
+                routing_quality,
                 "predict_compatibility_logits",
                 return_value=compatibility_logits,
             ) as predict_compatibility,
             mock.patch.object(
-                compatibility,
+                routing_quality,
                 "blend_quality_logits",
                 return_value=combined,
             ) as blend,
             mock.patch.object(
-                hash_regex,
-                "predict_episode",
-                return_value=({model_id: 0.0 for model_id in MODEL_IDS}, costs),
+                routing_costs,
+                "predict_costs",
+                return_value=costs,
             ) as predict_cost,
             mock.patch.object(
-                hash_regex,
+                allocator,
                 "select_models",
                 return_value=(selected, 1.75),
             ) as select,
-            mock.patch.object(hash_regex, "fill_ax31_upgrades") as fill,
+            mock.patch.object(allocator, "fill_ax31_upgrades") as fill,
         ):
-            plan = router.make_e5_binomial_submission(
+            submission = router.route(
                 inputs,
                 self.policy,
-                self.hash_artifact,
-                self.binomial_model,
-                self.compatibility_model,
-                encoder,
                 "balanced",
+                self._artifacts(encoder),
             )
 
         self.assertEqual(
@@ -189,7 +194,7 @@ class E5BinomialRouterTest(unittest.TestCase):
         )
         fill.assert_not_called()
         self.assertEqual(
-            selected, tuple(row.model_id for row in plan.submission.decisions)
+            selected, tuple(row.model_id for row in submission.decisions)
         )
         for call in blend.call_args_list:
             self.assertEqual(0.5, call.kwargs["compatibility_weight"])
@@ -203,37 +208,29 @@ class E5BinomialRouterTest(unittest.TestCase):
         filled = (MODEL_IDS[1], MODEL_IDS[0])
         with (
             mock.patch.object(
-                hash_regex,
+                allocator,
                 "select_models",
                 return_value=(initial, 1.0),
             ),
             mock.patch.object(
-                hash_regex,
+                allocator,
                 "fill_ax31_upgrades",
                 return_value=(filled, 1.5),
             ) as fill,
         ):
-            plan = router.make_e5_binomial_submission(
+            submission = router.route(
                 inputs,
                 self.policy,
-                self.hash_artifact,
-                self.binomial_model,
-                self.compatibility_model,
-                encoder,
                 "premium",
+                self._artifacts(encoder),
             )
 
         self.assertEqual(
-            filled, tuple(row.model_id for row in plan.submission.decisions)
+            filled, tuple(row.model_id for row in submission.decisions)
         )
         self.assertEqual(
-            hash_regex.PREMIUM_AX31_FILL_SAFETY_RATIO,
+            allocator.PREMIUM_AX31_FILL_SAFETY_RATIO,
             fill.call_args.kwargs["safety_ratio"],
-        )
-        self.assertEqual(1.5, plan.predicted_budget_ratio)
-        self.assertEqual(
-            hash_regex.PREMIUM_AX31_FILL_SAFETY_RATIO,
-            plan.ax31_fill_safety_ratio,
         )
 
     def test_ids_and_row_order_do_not_change_content_decisions(self) -> None:
@@ -241,24 +238,18 @@ class E5BinomialRouterTest(unittest.TestCase):
         changed = _changed_inputs(original)
         for tier in ("fast", "balanced", "premium"):
             with self.subTest(tier=tier):
-                first = router.make_e5_binomial_submission(
+                first = router.route(
                     original,
                     self.policy,
-                    self.hash_artifact,
-                    self.binomial_model,
-                    self.compatibility_model,
-                    _Encoder(self.compatibility_model.encoder),
                     tier,
-                ).submission
-                second = router.make_e5_binomial_submission(
+                    self._artifacts(_Encoder(self.compatibility_model.encoder)),
+                )
+                second = router.route(
                     changed,
                     self.policy,
-                    self.hash_artifact,
-                    self.binomial_model,
-                    self.compatibility_model,
-                    _Encoder(self.compatibility_model.encoder),
                     tier,
-                ).submission
+                    self._artifacts(_Encoder(self.compatibility_model.encoder)),
+                )
 
                 self.assertEqual(
                     _by_content(original, first),
@@ -273,28 +264,25 @@ class E5BinomialRouterTest(unittest.TestCase):
             )
         )
         with self.assertRaises(ValueError):
-            router.make_e5_binomial_submission(
+            router.route(
                 _inputs(),
                 self.policy,
-                self.hash_artifact,
-                self.binomial_model,
-                self.compatibility_model,
-                encoder,
                 "fast",
+                self._artifacts(encoder),
             )
         wrong_features = dataclasses.replace(
             self.binomial_model,
             feature_names=tuple(reversed(self.binomial_model.feature_names)),
         )
         with self.assertRaises(ValueError):
-            router.make_e5_binomial_submission(
+            router.route(
                 _inputs(),
                 self.policy,
-                self.hash_artifact,
-                wrong_features,
-                self.compatibility_model,
-                _Encoder(self.compatibility_model.encoder),
                 "fast",
+                self._artifacts(
+                    _Encoder(self.compatibility_model.encoder),
+                    binomial_model=wrong_features,
+                ),
             )
 
     def test_runtime_module_has_no_outcome_scoring_or_network_dependency(self) -> None:
@@ -315,7 +303,8 @@ class E5BinomialRouterTest(unittest.TestCase):
         result = subprocess.run(
             [
                 sys.executable,
-                str(ROOT / "baselines/e5_binomial_router.py"),
+                "-m",
+                "ossp_router.e5_router",
                 "--help",
             ],
             cwd=ROOT,

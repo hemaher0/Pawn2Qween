@@ -179,7 +179,7 @@ def _worker(args: argparse.Namespace) -> int:
             from hash_regex import load_artifact, make_hash_regex_submission
 
             artifact = load_artifact(
-                ROOT / "baselines/hash-regex-public.v1.json"
+                ROOT / "src/ossp_router/resources/hash-regex-public.v1.json"
             )
             submission = make_hash_regex_submission(
                 inputs, policy, artifact, args.tier
@@ -287,7 +287,7 @@ def _artifact_hashes() -> Dict[str, str]:
             ROOT / "src/ossp_router/resources/routing-policy.v1.json"
         ),
         "representative_router_artifact_sha256": _sha256_file(
-            ROOT / "baselines/hash-regex-public.v1.json"
+            ROOT / "src/ossp_router/resources/hash-regex-public.v1.json"
         ),
     }
 

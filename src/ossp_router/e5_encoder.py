@@ -9,7 +9,7 @@ import math
 from pathlib import Path
 from typing import Any, Callable, Sequence, Tuple
 
-from baselines.e5_bilinear_compatibility import (
+from ossp_router.e5_artifact import (
     EMBEDDING_DIMENSION,
     E5EncoderIdentity,
 )

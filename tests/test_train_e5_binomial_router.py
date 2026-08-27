@@ -17,8 +17,8 @@ try:
 except ModuleNotFoundError as error:
     raise unittest.SkipTest("E5 training tests require NumPy") from error
 
-from baselines import e5_bilinear_compatibility as compatibility
 from baselines import train_e5_binomial_router as trainer
+from ossp_router import e5_artifact as compatibility
 from ossp_router.protocol import MODEL_IDS
 
 

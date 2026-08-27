@@ -32,6 +32,15 @@ CANONICAL_LICENSE_HASHES = {
     ),
 }
 
+OFFICIAL_WRAPPER_CONTRACT_HASHES = {
+    "schemas/input.v1.schema.json": (
+        "f13099112aa0a45d04cf07ec98a52d70599b6e2352f838cd3e16aeed60d4e45b"
+    ),
+    "schemas/submission.v1.schema.json": (
+        "5bc138faea4d80ca5f52f43935c2c5b94680239e4a7290266a8eb9daabfb9841"
+    ),
+}
+
 REQUIRED_FILES = {
     ".github/workflows/ci.yml",
     ".github/workflows/release.yml",
@@ -67,9 +76,7 @@ REQUIRED_FILES = {
     "docs/runtime-benchmark.md",
     "baselines/README.md",
     "baselines/feature_budget.py",
-    "baselines/hash_regex.py",
     "baselines/prompt_heuristic.py",
-    "baselines/train_hash_regex.py",
     "schemas/input.v1.schema.json",
     "schemas/outcome.v1.schema.json",
     "schemas/policy.v1.schema.json",
@@ -78,6 +85,7 @@ REQUIRED_FILES = {
     "scripts/build-arm64.sh",
     "src/ossp_router/cli.py",
     "src/ossp_router/heuristic.py",
+    "src/ossp_router/hash_router.py",
     "src/ossp_router/image_evidence.py",
     "src/ossp_router/operator_helper.py",
     "src/ossp_router/orchestrator.py",
@@ -87,12 +95,20 @@ REQUIRED_FILES = {
     "src/ossp_router/runtime.py",
     "src/ossp_router/scoring.py",
     "src/ossp_router/tiebreak_latency.py",
+    "src/ossp_router/training/__init__.py",
+    "src/ossp_router/training/artifact_publication.py",
+    "src/ossp_router/training/binomial_quality.py",
+    "src/ossp_router/training/cli.py",
+    "src/ossp_router/training/e5_evaluation.py",
+    "src/ossp_router/training/e5_features.py",
+    "src/ossp_router/training/e5_fit.py",
+    "src/ossp_router/training/hash_training.py",
     "tests/test_operator_helper.py",
     "tests/test_prepare_release.py",
     "tests/test_orchestrator.py",
     "tests/test_check_runtime.py",
     "tests/test_feature_budget_baseline.py",
-    "tests/test_hash_regex_baseline.py",
+    "tests/test_hash_router.py",
     "tests/test_prompt_heuristic.py",
     "tests/test_public_runtime.py",
     "tests/test_retry_policy.py",
@@ -162,6 +178,30 @@ def _is_local_generated(relative: pathlib.Path) -> bool:
 
 
 class RepositoryPolicyTest(unittest.TestCase):
+    def test_official_wrapper_schemas_remain_byte_exact(self) -> None:
+        actual = {
+            path: hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
+            for path in OFFICIAL_WRAPPER_CONTRACT_HASHES
+        }
+        self.assertEqual(OFFICIAL_WRAPPER_CONTRACT_HASHES, actual)
+
+    def test_baselines_contains_only_comparison_examples(self) -> None:
+        present = {
+            path.name
+            for path in (ROOT / "baselines").iterdir()
+            if path.is_file()
+        }
+        self.assertEqual(
+            {
+                "README.md",
+                "__init__.py",
+                "always_light.py",
+                "feature_budget.py",
+                "prompt_heuristic.py",
+            },
+            present,
+        )
+
     def test_required_files_exist(self) -> None:
         missing = sorted(path for path in REQUIRED_FILES if not (ROOT / path).is_file())
         self.assertEqual([], missing)
@@ -455,17 +495,16 @@ class RepositoryPolicyTest(unittest.TestCase):
         self.assertEqual(32_768, policy["context_limit_tokens"])
         self.assertNotIn("challenge_id", policy)
         self.assertNotIn("warning_threshold", policy)
-        for document in ("README.md", "docs/SCORING.md"):
-            text = (ROOT / document).read_text(encoding="utf-8")
-            for tier, expected_weight in (
-                ("fast", "0.4"),
-                ("balanced", "0.3"),
-                ("premium", "0.3"),
-            ):
-                self.assertEqual(
-                    expected_weight, str(float(policy["tiers"][tier]["weight"]))
-                )
-                self.assertIn(expected_weight, text)
+        text = (ROOT / "docs/SCORING.md").read_text(encoding="utf-8")
+        for tier, expected_weight in (
+            ("fast", "0.4"),
+            ("balanced", "0.3"),
+            ("premium", "0.3"),
+        ):
+            self.assertEqual(
+                expected_weight, str(float(policy["tiers"][tier]["weight"]))
+            )
+            self.assertIn(expected_weight, text)
 
     def test_participant_docs_do_not_expose_internal_release_terms(self) -> None:
         forbidden = (
@@ -912,6 +951,7 @@ class RepositoryPolicyTest(unittest.TestCase):
             "!src/ossp_router/e5_artifact.py",
             "!src/ossp_router/e5_encoder.py",
             "!src/ossp_router/e5_router.py",
+            "!src/ossp_router/hash_router.py",
             "!src/ossp_router/heuristic.py",
             "!src/ossp_router/protocol.py",
             "!src/ossp_router/routing_allocator.py",
@@ -929,7 +969,6 @@ class RepositoryPolicyTest(unittest.TestCase):
             "!baselines/",
             "baselines/**",
             "!baselines/feature_budget.py",
-            "!baselines/hash_regex.py",
             "!build/",
             "build/**",
             "!build/e5-model/",

@@ -85,7 +85,6 @@ jobs:
         run: >-
           uv run --locked --no-dev --group e5-runtime --no-sync
           python -m unittest
-          tests.test_binomial_logistic_quality
           tests.test_e5_bilinear_compatibility
           tests.test_e5_binomial_router
           tests.test_e5_dependency_matrix
@@ -115,7 +114,9 @@ jobs:
         run: >-
           uv run --locked --no-dev --group e5-train --no-sync
           python -m unittest
-          tests.test_train_e5_binomial_router
+          tests.test_binomial_quality_training
+          tests.test_e5_training
+          tests.test_hash_router
 
   arm64-image:
     runs-on: ubuntu-latest

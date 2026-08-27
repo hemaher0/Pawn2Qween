@@ -710,9 +710,7 @@ e5-runtime = [
 ]
 e5-train = [
     { name = "numpy", version = "2.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
-    { name = "onnxruntime", marker = "python_full_version == '3.11.*'" },
     { name = "scikit-learn", marker = "python_full_version == '3.11.*'" },
-    { name = "tokenizers", marker = "python_full_version == '3.11.*'" },
     { name = "torch", marker = "python_full_version == '3.11.*' and platform_machine == 'x86_64' and sys_platform == 'linux'" },
 ]
 materialize = [
@@ -742,9 +740,7 @@ e5-runtime = [
 ]
 e5-train = [
     { name = "numpy", marker = "python_full_version == '3.11.*'", specifier = "==2.0.2" },
-    { name = "onnxruntime", marker = "python_full_version == '3.11.*'", specifier = "==1.28.0" },
     { name = "scikit-learn", marker = "python_full_version == '3.11.*'", specifier = "==1.7.2" },
-    { name = "tokenizers", marker = "python_full_version == '3.11.*'", specifier = "==0.22.2" },
     { name = "torch", marker = "python_full_version == '3.11.*' and platform_machine == 'x86_64' and sys_platform == 'linux'", specifier = "==2.8.0" },
 ]
 materialize = [{ name = "pyarrow", marker = "python_full_version >= '3.10'", specifier = "==23.0.1" }]

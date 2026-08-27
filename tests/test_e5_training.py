@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import importlib.metadata
 import inspect
+import io
 import json
 import os
 import pathlib
@@ -11,16 +13,20 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 
 try:
     import numpy as np
 except ModuleNotFoundError as error:
     raise unittest.SkipTest("E5 training tests require NumPy") from error
 
-from baselines import e5_artifact_publication as publication
-from baselines import train_e5_binomial_router as trainer
 from ossp_router import e5_artifact as compatibility
 from ossp_router.protocol import MODEL_IDS
+from ossp_router.training import artifact_publication as publication
+from ossp_router.training import e5_evaluation, e5_features, e5_fit
+
+
+PROJECT_NAME = "ossp-2026-llm-router-challenge"
 
 
 def _unit_embeddings(rows: int) -> np.ndarray:
@@ -49,26 +55,42 @@ def _metadata(train_rows: int, dev_rows: int) -> dict[str, object]:
     }
 
 
-class TrainE5BinomialRouterTest(unittest.TestCase):
+class E5TrainingTest(unittest.TestCase):
+    def test_router_train_entrypoint_exposes_each_offline_stage(self) -> None:
+        distribution = importlib.metadata.distribution(PROJECT_NAME)
+        entrypoint = next(
+            item
+            for item in distribution.entry_points
+            if item.group == "console_scripts" and item.name == "router-train"
+        )
+        self.assertEqual("ossp_router.training.cli:main", entrypoint.value)
+
+        output = io.StringIO()
+        with redirect_stdout(output), self.assertRaises(SystemExit) as raised:
+            entrypoint.load()(["--help"])
+
+        self.assertEqual(0, raised.exception.code)
+        self.assertIn("{hash,encode,fit,evaluate}", output.getvalue())
+
     def test_cli_delegates_each_offline_stage_to_one_module(self) -> None:
         root = pathlib.Path(__file__).resolve().parents[1]
-        cli = (root / "baselines/train_e5_binomial_router.py").read_text(
+        cli = (root / "src/ossp_router/training/cli.py").read_text(
             encoding="utf-8"
         )
-        feature_stage = (root / "baselines/e5_training_features.py").read_text(
+        feature_stage = (root / "src/ossp_router/training/e5_features.py").read_text(
             encoding="utf-8"
         )
-        fit_stage = (root / "baselines/e5_training_fit.py").read_text(
+        fit_stage = (root / "src/ossp_router/training/e5_fit.py").read_text(
             encoding="utf-8"
         )
         evaluation_stage = (
-            root / "baselines/e5_training_evaluation.py"
+            root / "src/ossp_router/training/e5_evaluation.py"
         ).read_text(encoding="utf-8")
 
-        self.assertLessEqual(len(cli.splitlines()), 180)
-        self.assertIn("e5_training_features", cli)
-        self.assertIn("e5_training_fit", cli)
-        self.assertIn("e5_training_evaluation", cli)
+        self.assertLessEqual(len(cli.splitlines()), 200)
+        self.assertIn("e5_features", cli)
+        self.assertIn("e5_fit", cli)
+        self.assertIn("e5_evaluation", cli)
         self.assertNotIn("load_outcomes", feature_stage)
         self.assertNotIn("import torch", feature_stage)
         self.assertNotIn("dev_outcomes", fit_stage)
@@ -77,7 +99,7 @@ class TrainE5BinomialRouterTest(unittest.TestCase):
     def test_deterministic_cuda_environment_is_set_before_torch_import(self) -> None:
         original = os.environ.pop("CUBLAS_WORKSPACE_CONFIG", None)
         try:
-            trainer._configure_deterministic_torch_environment()
+            e5_fit._configure_deterministic_torch_environment()
 
             self.assertEqual(":4096:8", os.environ["CUBLAS_WORKSPACE_CONFIG"])
         finally:
@@ -92,7 +114,8 @@ class TrainE5BinomialRouterTest(unittest.TestCase):
         result = subprocess.run(
             [
                 sys.executable,
-                str(root / "baselines/train_e5_binomial_router.py"),
+                "-m",
+                "ossp_router.training.cli",
                 "--help",
             ],
             cwd=root,
@@ -102,7 +125,7 @@ class TrainE5BinomialRouterTest(unittest.TestCase):
         )
 
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertIn("{encode,fit,evaluate}", result.stdout)
+        self.assertIn("{hash,encode,fit,evaluate}", result.stdout)
 
     def test_feature_archive_requires_ordered_digests_and_unit_vectors(self) -> None:
         texts = ("first prompt", "second prompt", "dev prompt")
@@ -110,7 +133,7 @@ class TrainE5BinomialRouterTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw_directory:
             directory = pathlib.Path(raw_directory)
             path = directory / "features.npz"
-            trainer.write_feature_archive(
+            e5_features.write_feature_archive(
                 path,
                 texts=texts,
                 embeddings=embeddings,
@@ -118,7 +141,7 @@ class TrainE5BinomialRouterTest(unittest.TestCase):
                 metadata=_metadata(train_rows=2, dev_rows=1),
             )
 
-            archive = trainer.load_feature_archive(
+            archive = e5_features.load_feature_archive(
                 path,
                 expected_texts=texts,
                 train_rows=2,
@@ -131,12 +154,12 @@ class TrainE5BinomialRouterTest(unittest.TestCase):
             self.assertFalse(archive.embeddings.flags.writeable)
             self.assertEqual((False, True, False), tuple(archive.truncated))
             self.assertEqual(
-                tuple(trainer.content_sha256(text) for text in texts),
+                tuple(e5_features.content_sha256(text) for text in texts),
                 archive.content_sha256,
             )
 
             with self.assertRaises(ValueError):
-                trainer.load_feature_archive(
+                e5_features.load_feature_archive(
                     path,
                     expected_texts=tuple(reversed(texts)),
                     train_rows=2,
@@ -149,7 +172,7 @@ class TrainE5BinomialRouterTest(unittest.TestCase):
                 np.savez_compressed(
                     stream,
                     content_sha256=np.asarray(
-                        tuple(trainer.content_sha256(text) for text in texts)
+                        tuple(e5_features.content_sha256(text) for text in texts)
                     ),
                     embeddings=invalid,
                     truncated=np.zeros(len(texts), dtype=bool),
@@ -158,7 +181,7 @@ class TrainE5BinomialRouterTest(unittest.TestCase):
                     ),
                 )
             with self.assertRaises(ValueError):
-                trainer.load_feature_archive(
+                e5_features.load_feature_archive(
                     path,
                     expected_texts=texts,
                     train_rows=2,
@@ -172,7 +195,7 @@ class TrainE5BinomialRouterTest(unittest.TestCase):
         )
         counts = np.asarray(((2, 4, 8), (4, 4, 2)), dtype=np.float64)
 
-        targets, trials = trainer.jeffreys_targets(quality, counts)
+        targets, trials = e5_fit.jeffreys_targets(quality, counts)
 
         expected_successes = np.rint(quality * counts) + 0.5
         np.testing.assert_allclose(expected_successes / (counts + 1.0), targets)
@@ -195,27 +218,27 @@ class TrainE5BinomialRouterTest(unittest.TestCase):
         arguments = {
             "train_input_sha256": "1" * 64,
             "train_outcome_sha256": "2" * 64,
-            "seed": trainer.FULL_FIT_SEED,
+            "seed": e5_fit.FULL_FIT_SEED,
             "steps": 20,
             "device": "cpu",
         }
 
-        first = trainer.fit_compatibility_model(
+        first = e5_fit.fit_compatibility_model(
             embeddings,
             quality,
             counts,
             **arguments,
         )
-        second = trainer.fit_compatibility_model(
+        second = e5_fit.fit_compatibility_model(
             embeddings,
             quality,
             counts,
             **arguments,
         )
-        first_bytes = trainer.canonical_artifact_bytes(
+        first_bytes = publication.canonical_artifact_bytes(
             publication.compatibility_model_to_artifact(first)
         )
-        second_bytes = trainer.canonical_artifact_bytes(
+        second_bytes = publication.canonical_artifact_bytes(
             publication.compatibility_model_to_artifact(second)
         )
 
@@ -236,7 +259,7 @@ class TrainE5BinomialRouterTest(unittest.TestCase):
                 self.assertAlmostEqual(expected[model_id], actual[model_id], places=7)
 
     def test_compatibility_fit_cannot_receive_binomial_predictions(self) -> None:
-        parameters = inspect.signature(trainer.fit_compatibility_model).parameters
+        parameters = inspect.signature(e5_fit.fit_compatibility_model).parameters
 
         self.assertEqual(
             {
@@ -256,13 +279,13 @@ class TrainE5BinomialRouterTest(unittest.TestCase):
     def test_optimizer_regularizes_factors_but_not_bias(self) -> None:
         import torch
 
-        module = trainer._build_bilinear_module(
+        module = e5_fit._build_bilinear_module(
             compatibility.EMBEDDING_DIMENSION,
             len(MODEL_IDS),
-            seed=trainer.FULL_FIT_SEED,
+            seed=e5_fit.FULL_FIT_SEED,
         )
 
-        groups = trainer._optimizer_groups(module)
+        groups = e5_fit._optimizer_groups(module)
 
         self.assertEqual(
             (compatibility.LATENT_RANK, compatibility.EMBEDDING_DIMENSION),
@@ -272,7 +295,7 @@ class TrainE5BinomialRouterTest(unittest.TestCase):
             (len(MODEL_IDS), compatibility.LATENT_RANK),
             tuple(module.model_vectors.shape),
         )
-        self.assertEqual(trainer.WEIGHT_DECAY, groups[0]["weight_decay"])
+        self.assertEqual(e5_fit.WEIGHT_DECAY, groups[0]["weight_decay"])
         self.assertEqual(0.0, groups[1]["weight_decay"])
         self.assertEqual(
             {id(module.bias)}, {id(value) for value in groups[1]["params"]}
@@ -293,18 +316,18 @@ class TrainE5BinomialRouterTest(unittest.TestCase):
         embeddings = _unit_embeddings(6)
         quality = np.full((6, len(MODEL_IDS)), 0.5, dtype=np.float64)
         counts = np.full_like(quality, 2.0)
-        model = trainer.fit_compatibility_model(
+        model = e5_fit.fit_compatibility_model(
             embeddings,
             quality,
             counts,
             train_input_sha256="3" * 64,
             train_outcome_sha256="4" * 64,
-            seed=trainer.FULL_FIT_SEED,
+            seed=e5_fit.FULL_FIT_SEED,
             steps=2,
             device="cpu",
         )
 
-        serialized = trainer.canonical_artifact_bytes(
+        serialized = publication.canonical_artifact_bytes(
             publication.compatibility_model_to_artifact(model)
         ).decode("utf-8")
 
@@ -320,7 +343,7 @@ class TrainE5BinomialRouterTest(unittest.TestCase):
             self.assertNotIn(forbidden, serialized)
 
     def test_evaluate_hashes_dev_actions_before_loading_dev_outcomes(self) -> None:
-        source = inspect.getsource(trainer._evaluate_command)
+        source = inspect.getsource(e5_evaluation._evaluate_command)
 
         freeze_position = source.index('"dev_candidate": _action_sha256')
         outcome_load_position = source.index(

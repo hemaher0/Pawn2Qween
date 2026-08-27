@@ -10,6 +10,7 @@ import pathlib
 import subprocess
 import sys
 import unittest
+from types import SimpleNamespace
 from contextlib import redirect_stderr
 from unittest import mock
 
@@ -343,6 +344,53 @@ class E5BinomialRouterTest(unittest.TestCase):
             stderr.getvalue(),
         )
         self.assertNotIn("private", stderr.getvalue())
+
+    def test_cli_accepts_the_official_wrapper_arguments(self) -> None:
+        inputs = _inputs()
+        policy = load_bundled_policy()
+        expected = mock.sentinel.submission
+        compatibility_model = SimpleNamespace(encoder=mock.sentinel.identity)
+        output = pathlib.Path("/challenge/output/submission.json")
+        with (
+            mock.patch.object(router, "load_input", return_value=inputs),
+            mock.patch.object(router, "load_bundled_policy", return_value=policy),
+            mock.patch.object(
+                router,
+                "load_hash_artifact",
+                return_value=mock.sentinel.hash_artifact,
+            ),
+            mock.patch.object(
+                router,
+                "load_binomial_artifact",
+                return_value=mock.sentinel.binomial_artifact,
+            ),
+            mock.patch.object(
+                router,
+                "load_compatibility_artifact",
+                return_value=compatibility_model,
+            ),
+            mock.patch.object(
+                router,
+                "_load_encoder",
+                return_value=mock.sentinel.encoder,
+            ),
+            mock.patch.object(router, "route", return_value=expected) as route,
+            mock.patch.object(router, "write_submission_atomic") as write,
+        ):
+            result = router.main(
+                (
+                    "--input",
+                    "/challenge/input/inputs.json",
+                    "--tier",
+                    "balanced",
+                    "--output",
+                    str(output),
+                )
+            )
+
+        self.assertEqual(0, result)
+        route.assert_called_once()
+        write.assert_called_once_with(output, expected)
 
 
 if __name__ == "__main__":

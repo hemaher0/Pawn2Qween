@@ -20,9 +20,6 @@ from ossp_router import e5_artifact as compatibility
 from ossp_router import e5_encoder as e5_onnx_encoder
 from ossp_router.heuristic import episode_text
 from ossp_router.protocol import load_input
-from tools import fetch_e5_model
-
-
 _UNIT_NORM_TOLERANCE = 2.0e-4
 _FEATURE_KEYS = frozenset(
     ("content_sha256", "embeddings", "truncated", "metadata_json")
@@ -302,6 +299,9 @@ def load_train_feature_archive(
 def _verified_encoder(
     model_spec_path: Path, model_dir: Path
 ) -> e5_onnx_encoder.E5OnnxEncoder:
+    # Model acquisition stays outside the installable package and runtime.
+    from tools import fetch_e5_model
+
     spec = fetch_e5_model.load_model_spec(model_spec_path)
     for file in spec.files:
         local_path = model_dir.joinpath(*file.path.parts)

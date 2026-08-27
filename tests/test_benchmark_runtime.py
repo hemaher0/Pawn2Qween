@@ -308,7 +308,7 @@ class BenchmarkEvidenceTest(unittest.TestCase):
         self.assertIn("tools/fetch_e5_model.py", paths)
         self.assertIn("src/ossp_router/runtime.py", paths)
         self.assertIn("baselines/feature_budget.py", paths)
-        self.assertIn("baselines/hash_regex.py", paths)
+        self.assertIn("src/ossp_router/hash_router.py", paths)
         self.assertIn(
             "src/ossp_router/resources/hash-regex-public.v1.json", paths
         )

@@ -13,14 +13,16 @@ from typing import Any, Tuple
 
 import numpy as np
 
-from baselines import binomial_logistic_quality as binomial
-from baselines import e5_artifact_publication as publication
-from baselines import e5_training_features as feature_io
-from baselines import hash_regex
 from ossp_router import e5_artifact as compatibility
 from ossp_router import e5_encoder as e5_onnx_encoder
 from ossp_router.heuristic import episode_text
 from ossp_router.protocol import MODEL_IDS, InputBatch, OutcomeBatch, load_input, load_outcomes
+from ossp_router.routing_artifacts import HashRegexArtifact
+from ossp_router.routing_features import DENSE_FEATURE_NAMES, raw_feature_vector
+
+from . import artifact_publication as publication
+from . import binomial_quality as binomial
+from . import e5_features as feature_io
 
 
 PROTOCOL_SEED = 20260827
@@ -306,23 +308,23 @@ def quality_and_generations(
     return quality, generations
 
 
-def hash_feature_names(artifact: hash_regex.HashRegexArtifact) -> Tuple[str, ...]:
+def hash_feature_names(artifact: HashRegexArtifact) -> Tuple[str, ...]:
     """Return the exact raw hash-regex feature order used by the binomial heads."""
 
-    dense = tuple(map(str, hash_regex.DENSE_FEATURE_NAMES))
+    dense = tuple(map(str, DENSE_FEATURE_NAMES))
     hashed = tuple(f"signed_hash_{index}" for index in range(artifact.hash_bins))
     return dense + hashed
 
 
 def raw_hash_features(
     inputs: InputBatch,
-    artifact: hash_regex.HashRegexArtifact,
+    artifact: HashRegexArtifact,
 ) -> np.ndarray:
     """Build the raw binomial feature matrix in input order."""
 
     return np.asarray(
         [
-            hash_regex.raw_feature_vector(episode, artifact.hash_bins)
+            raw_feature_vector(episode, artifact.hash_bins)
             for episode in inputs.episodes
         ],
         dtype=np.float64,
@@ -340,7 +342,9 @@ def fit(args: argparse.Namespace) -> None:
         expected_train_texts=texts,
     )
     quality, generations = quality_and_generations(train_inputs, train_outcomes)
-    hash_artifact = hash_regex.load_artifact(args.hash_artifact)
+    from ossp_router.routing_artifacts import load_hash_artifact
+
+    hash_artifact = load_hash_artifact(args.hash_artifact)
     raw_features = raw_hash_features(train_inputs, hash_artifact)
     names = hash_feature_names(hash_artifact)
     if raw_features.shape[1] != len(names):

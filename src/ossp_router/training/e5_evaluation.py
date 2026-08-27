@@ -15,7 +15,6 @@ from typing import Mapping, Sequence, Tuple
 import numpy as np
 
 from ossp_router import e5_artifact as compatibility
-from ossp_router.hash_router import predict_episode
 from ossp_router.heuristic import episode_text
 from ossp_router.protocol import (
     MODEL_IDS,
@@ -30,11 +29,8 @@ from ossp_router.protocol import (
     load_outcomes,
 )
 from ossp_router.scoring import score_submissions
-from ossp_router.routing_allocator import (
-    PREMIUM_AX31_FILL_SAFETY_RATIO,
-    fill_ax31_upgrades,
-    select_models,
-)
+from ossp_router.routing_costs import predict_costs
+from ossp_router.routing_allocator import allocate_tier
 from ossp_router.routing_artifacts import HashRegexArtifact, load_hash_artifact
 
 from . import artifact_publication as publication
@@ -82,9 +78,7 @@ def _predicted_costs(
     inputs: InputBatch,
     artifact: HashRegexArtifact,
 ) -> Tuple[Mapping[str, float], ...]:
-    return tuple(
-        predict_episode(episode, artifact)[1] for episode in inputs.episodes
-    )
+    return tuple(predict_costs(episode, artifact) for episode in inputs.episodes)
 
 
 def _route_all_tiers(
@@ -97,20 +91,13 @@ def _route_all_tiers(
     submissions = []
     predicted_ratios = {}
     for tier in TIERS:
-        selected, ratio = select_models(
+        selected, ratio, _fill_safety = allocate_tier(
             scores,
             costs,
+            tier=tier,
             budget_multiplier=float(policy.tiers[tier].budget_multiplier),
             safety_ratio=artifact.tier_safety_ratios[tier],
         )
-        if tier == "premium":
-            selected, ratio = fill_ax31_upgrades(
-                selected,
-                scores,
-                costs,
-                budget_multiplier=float(policy.tiers[tier].budget_multiplier),
-                safety_ratio=PREMIUM_AX31_FILL_SAFETY_RATIO,
-            )
         submissions.append(
             Submission(
                 schema_version=inputs.schema_version,

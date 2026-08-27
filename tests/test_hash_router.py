@@ -9,10 +9,12 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
-from ossp_router import hash_router
+from ossp_router import hash_router, routing_allocator, routing_features
 from ossp_router.heuristic import episode_text
 from ossp_router.protocol import (
+    Episode,
     ProtocolError,
     load_bundled_policy,
     load_input,
@@ -25,6 +27,56 @@ from ossp_router.training import hash_training
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+class HashInferenceEfficiencyTest(unittest.TestCase):
+    def test_allocate_tier_preserves_initial_and_premium_results(self) -> None:
+        scores = (
+            {"ax31-light": 0.1, "ax31": 0.8, "axk1-think": 0.9},
+            {"ax31-light": 0.9, "ax31": 0.2, "axk1-think": 0.1},
+        )
+        costs = (
+            {"ax31-light": 1.0, "ax31": 2.0, "axk1-think": 3.0},
+            {"ax31-light": 1.0, "ax31": 2.0, "axk1-think": 3.0},
+        )
+
+        fast = routing_allocator.allocate_tier(
+            scores,
+            costs,
+            tier="fast",
+            budget_multiplier=1.0,
+            safety_ratio=1.0,
+        )
+        premium = routing_allocator.allocate_tier(
+            scores,
+            costs,
+            tier="premium",
+            budget_multiplier=4.0,
+            safety_ratio=1.0,
+        )
+
+        self.assertEqual((("ax31-light", "ax31-light"), 1.0, None), fast)
+        self.assertEqual(
+            (("axk1-think", "ax31-light"), 2.0, 0.65),
+            premium,
+        )
+
+    def test_predict_episode_extracts_prompt_features_once(self) -> None:
+        artifact = load_hash_artifact(
+            ROOT / "src/ossp_router/resources/hash-regex-public.v1.json"
+        )
+        episode = Episode("episode", prompt="derive 2 + 2 exactly")
+
+        with mock.patch.object(
+            routing_features,
+            "extract_features",
+            wraps=routing_features.extract_features,
+        ) as extract:
+            scores, costs = hash_router.predict_episode(episode, artifact)
+
+        self.assertEqual(set(artifact.score_heads), set(scores))
+        self.assertEqual(set(artifact.log_cost_heads), set(costs))
+        self.assertEqual(1, extract.call_count)
 
 
 class HashTrainingCliContractTest(unittest.TestCase):

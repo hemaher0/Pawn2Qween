@@ -16,18 +16,18 @@ from .protocol import (
     ProtocolError,
     RoutingPolicy,
     Submission,
-    parse_submission,
     policy_sha256,
-    submission_to_dict,
 )
 from .routing_allocator import (
     PREMIUM_AX31_FILL_SAFETY_RATIO,
+    allocate_tier,
     fill_ax31_upgrades,
     select_models,
 )
 from .routing_artifacts import HashRegexArtifact
-from .routing_costs import predict_costs
-from .routing_quality import predict_hash_quality
+from .routing_costs import predict_costs_from_features
+from .routing_features import raw_feature_vector, standardize_feature_vector
+from .routing_quality import predict_hash_quality_from_features
 
 
 @dataclass(frozen=True)
@@ -46,7 +46,16 @@ def predict_episode(
 ) -> Tuple[Mapping[str, float], Mapping[str, float]]:
     """Predict quality and cost without mixing their implementations."""
 
-    return predict_hash_quality(episode, artifact), predict_costs(episode, artifact)
+    raw = raw_feature_vector(episode, artifact.hash_bins)
+    standardized = standardize_feature_vector(
+        raw,
+        artifact.feature_mean,
+        artifact.feature_scale,
+    )
+    return (
+        predict_hash_quality_from_features(standardized, artifact),
+        predict_costs_from_features(standardized, artifact),
+    )
 
 
 def make_hash_submission(
@@ -72,22 +81,13 @@ def make_hash_submission(
     scores = tuple(item[0] for item in predictions)
     costs = tuple(item[1] for item in predictions)
     safety = artifact.tier_safety_ratios[tier]
-    selected, ratio = select_models(
+    selected, ratio, fill_safety = allocate_tier(
         scores,
         costs,
+        tier=tier,
         budget_multiplier=float(policy.tiers[tier].budget_multiplier),
         safety_ratio=safety,
     )
-    fill_safety = None
-    if tier == "premium":
-        fill_safety = PREMIUM_AX31_FILL_SAFETY_RATIO
-        selected, ratio = fill_ax31_upgrades(
-            selected,
-            scores,
-            costs,
-            budget_multiplier=float(policy.tiers[tier].budget_multiplier),
-            safety_ratio=fill_safety,
-        )
     submission = Submission(
         schema_version=inputs.schema_version,
         challenge_id=inputs.challenge_id,
@@ -100,7 +100,7 @@ def make_hash_submission(
         ),
     )
     return HashRouterPlan(
-        submission=parse_submission(submission_to_dict(submission)),
+        submission=submission,
         predicted_budget_ratio=ratio,
         safety_ratio=safety,
         ax31_fill_safety_ratio=fill_safety,

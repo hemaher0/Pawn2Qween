@@ -118,6 +118,25 @@ class E5BinomialRouterTest(unittest.TestCase):
             encoder=encoder,
         )
 
+    def test_route_extracts_hash_features_once_per_episode(self) -> None:
+        inputs = _inputs()
+        encoder = _Encoder(self.compatibility_model.encoder)
+
+        with mock.patch.object(
+            routing_features,
+            "extract_features",
+            wraps=routing_features.extract_features,
+        ) as extract:
+            submission = router.route(
+                inputs,
+                self.policy,
+                "balanced",
+                self._artifacts(encoder),
+            )
+
+        self.assertEqual(len(inputs.episodes), len(submission.decisions))
+        self.assertEqual(len(inputs.episodes), extract.call_count)
+
     def test_encodes_content_once_and_composes_quality_with_unchanged_costs(
         self,
     ) -> None:
@@ -160,15 +179,14 @@ class E5BinomialRouterTest(unittest.TestCase):
             ) as blend,
             mock.patch.object(
                 routing_costs,
-                "predict_costs",
+                "predict_costs_from_features",
                 return_value=costs,
             ) as predict_cost,
             mock.patch.object(
                 allocator,
-                "select_models",
-                return_value=(selected, 1.75),
-            ) as select,
-            mock.patch.object(allocator, "fill_ax31_upgrades") as fill,
+                "allocate_tier",
+                return_value=(selected, 1.75, None),
+            ) as allocate,
         ):
             submission = router.route(
                 inputs,
@@ -187,13 +205,13 @@ class E5BinomialRouterTest(unittest.TestCase):
         self.assertEqual(2, predict_compatibility.call_count)
         self.assertEqual(2, blend.call_count)
         self.assertEqual(2, predict_cost.call_count)
-        self.assertEqual((combined, combined), tuple(select.call_args.args[0]))
-        self.assertEqual((costs, costs), tuple(select.call_args.args[1]))
+        self.assertEqual((combined, combined), tuple(allocate.call_args.args[0]))
+        self.assertEqual((costs, costs), tuple(allocate.call_args.args[1]))
         self.assertEqual(
             self.hash_artifact.tier_safety_ratios["balanced"],
-            select.call_args.kwargs["safety_ratio"],
+            allocate.call_args.kwargs["safety_ratio"],
         )
-        fill.assert_not_called()
+        self.assertEqual("balanced", allocate.call_args.kwargs["tier"])
         self.assertEqual(
             selected, tuple(row.model_id for row in submission.decisions)
         )
@@ -205,20 +223,12 @@ class E5BinomialRouterTest(unittest.TestCase):
     def test_premium_uses_existing_ax31_fill_with_unchanged_safety(self) -> None:
         inputs = _inputs()
         encoder = _Encoder(self.compatibility_model.encoder)
-        initial = (MODEL_IDS[0], MODEL_IDS[0])
         filled = (MODEL_IDS[1], MODEL_IDS[0])
-        with (
-            mock.patch.object(
-                allocator,
-                "select_models",
-                return_value=(initial, 1.0),
-            ),
-            mock.patch.object(
-                allocator,
-                "fill_ax31_upgrades",
-                return_value=(filled, 1.5),
-            ) as fill,
-        ):
+        with mock.patch.object(
+            allocator,
+            "allocate_tier",
+            return_value=(filled, 1.5, 0.65),
+        ) as allocate:
             submission = router.route(
                 inputs,
                 self.policy,
@@ -230,8 +240,12 @@ class E5BinomialRouterTest(unittest.TestCase):
             filled, tuple(row.model_id for row in submission.decisions)
         )
         self.assertEqual(
-            allocator.PREMIUM_AX31_FILL_SAFETY_RATIO,
-            fill.call_args.kwargs["safety_ratio"],
+            "premium",
+            allocate.call_args.kwargs["tier"],
+        )
+        self.assertEqual(
+            self.hash_artifact.tier_safety_ratios["premium"],
+            allocate.call_args.kwargs["safety_ratio"],
         )
 
     def test_ids_and_row_order_do_not_change_content_decisions(self) -> None:

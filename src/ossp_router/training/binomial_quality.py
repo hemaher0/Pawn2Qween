@@ -6,13 +6,21 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
 from numbers import Real
 from typing import Any, Dict, Mapping, Sequence, Tuple
 
+from ossp_router.routing_artifacts import (
+    BINOMIAL_ARTIFACT_TYPE as ARTIFACT_TYPE,
+    BINOMIAL_SCHEMA_VERSION as SCHEMA_VERSION,
+    BinomialLogisticHead,
+    BinomialLogisticQualityModel,
+    parse_binomial_artifact,
+)
+from ossp_router.routing_quality import predict_binomial_quality
 
-ARTIFACT_TYPE = "ossp-binomial-logistic-quality-v1"
-SCHEMA_VERSION = 1
+
+parse_artifact = parse_binomial_artifact
+
 DEFAULT_INVERSE_REGULARIZATION = 0.01
 DEFAULT_MAX_ITERATIONS = 2_000
 DEFAULT_TOLERANCE = 1.0e-10
@@ -31,25 +39,6 @@ def _number(value: Any, label: str) -> float:
     return result
 
 
-def _vector(
-    value: Sequence[float],
-    label: str,
-    *,
-    expected_length: int | None = None,
-) -> Tuple[float, ...]:
-    if isinstance(value, (str, bytes)):
-        raise ValueError(f"{label} must be a sequence")
-    try:
-        result = tuple(
-            _number(item, f"{label}[{index}]") for index, item in enumerate(value)
-        )
-    except TypeError as error:
-        raise ValueError(f"{label} must be a sequence") from error
-    if expected_length is not None and len(result) != expected_length:
-        raise ValueError(f"{label} must contain {expected_length} values")
-    return result
-
-
 def _names(value: Sequence[str], label: str) -> Tuple[str, ...]:
     if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
         raise ValueError(f"{label} must be a sequence")
@@ -59,85 +48,6 @@ def _names(value: Sequence[str], label: str) -> Tuple[str, ...]:
     if len(set(result)) != len(result):
         raise ValueError(f"{label} must not contain duplicates")
     return result
-
-
-@dataclass(frozen=True)
-class BinomialLogisticHead:
-    """One model's intercept and standardized-feature coefficients."""
-
-    intercept: float
-    coefficients: Tuple[float, ...]
-
-    def __post_init__(self) -> None:
-        intercept = _number(self.intercept, "head.intercept")
-        coefficients = _vector(self.coefficients, "head.coefficients")
-        if not coefficients:
-            raise ValueError("head.coefficients must not be empty")
-        object.__setattr__(self, "intercept", intercept)
-        object.__setattr__(self, "coefficients", coefficients)
-
-
-@dataclass(frozen=True)
-class BinomialLogisticQualityModel:
-    """Aggregate normalization state and one quality head per model."""
-
-    feature_names: Tuple[str, ...]
-    feature_mean: Tuple[float, ...]
-    feature_scale: Tuple[float, ...]
-    model_ids: Tuple[str, ...]
-    heads: Tuple[BinomialLogisticHead, ...]
-
-    def __post_init__(self) -> None:
-        feature_names = _names(self.feature_names, "model.feature_names")
-        feature_mean = _vector(
-            self.feature_mean,
-            "model.feature_mean",
-            expected_length=len(feature_names),
-        )
-        feature_scale = _vector(
-            self.feature_scale,
-            "model.feature_scale",
-            expected_length=len(feature_names),
-        )
-        if any(value <= 0.0 for value in feature_scale):
-            raise ValueError("model.feature_scale values must be positive")
-        model_ids = _names(self.model_ids, "model.model_ids")
-        if isinstance(self.heads, (str, bytes)) or not isinstance(self.heads, Sequence):
-            raise ValueError("model.heads must be a sequence")
-        heads = tuple(self.heads)
-        if len(heads) != len(model_ids):
-            raise ValueError("model.heads must match model.model_ids")
-        for index, head in enumerate(heads):
-            if not isinstance(head, BinomialLogisticHead):
-                raise ValueError(f"model.heads[{index}] must be a BinomialLogisticHead")
-            if len(head.coefficients) != len(feature_names):
-                raise ValueError(
-                    f"model.heads[{index}].coefficients must match feature_names"
-                )
-        object.__setattr__(self, "feature_names", feature_names)
-        object.__setattr__(self, "feature_mean", feature_mean)
-        object.__setattr__(self, "feature_scale", feature_scale)
-        object.__setattr__(self, "model_ids", model_ids)
-        object.__setattr__(self, "heads", heads)
-
-
-def _object(value: Any, label: str) -> Mapping[str, Any]:
-    if not isinstance(value, dict):
-        raise ValueError(f"{label} must be an object")
-    return value
-
-
-def _exact_keys(value: Mapping[str, Any], expected: Sequence[str], label: str) -> None:
-    missing = sorted(set(expected) - set(value))
-    extra = sorted(set(value) - set(expected))
-    if missing or extra:
-        raise ValueError(f"{label} fields differ: missing={missing}, extra={extra}")
-
-
-def _artifact_vector(value: Any, length: int, label: str) -> Tuple[float, ...]:
-    if not isinstance(value, list):
-        raise ValueError(f"{label} must be an array")
-    return _vector(value, label, expected_length=length)
 
 
 def model_to_artifact(model: BinomialLogisticQualityModel) -> Dict[str, Any]:
@@ -160,118 +70,17 @@ def model_to_artifact(model: BinomialLogisticQualityModel) -> Dict[str, Any]:
     }
 
 
-def parse_artifact(value: Any) -> BinomialLogisticQualityModel:
-    """Parse a strict JSON-compatible aggregate artifact."""
-
-    root = _object(value, "artifact")
-    _exact_keys(
-        root,
-        (
-            "artifact_type",
-            "schema_version",
-            "feature_names",
-            "feature_mean",
-            "feature_scale",
-            "model_ids",
-            "heads",
-        ),
-        "artifact",
-    )
-    if root["artifact_type"] != ARTIFACT_TYPE:
-        raise ValueError("unsupported artifact_type")
-    if (
-        isinstance(root["schema_version"], bool)
-        or not isinstance(root["schema_version"], int)
-        or root["schema_version"] != SCHEMA_VERSION
-    ):
-        raise ValueError("unsupported schema_version")
-    if not isinstance(root["feature_names"], list):
-        raise ValueError("artifact.feature_names must be an array")
-    if not isinstance(root["model_ids"], list):
-        raise ValueError("artifact.model_ids must be an array")
-    feature_names = _names(root["feature_names"], "artifact.feature_names")
-    model_ids = _names(root["model_ids"], "artifact.model_ids")
-    feature_mean = _artifact_vector(
-        root["feature_mean"], len(feature_names), "artifact.feature_mean"
-    )
-    feature_scale = _artifact_vector(
-        root["feature_scale"], len(feature_names), "artifact.feature_scale"
-    )
-    raw_heads = _object(root["heads"], "artifact.heads")
-    if set(raw_heads) != set(model_ids):
-        raise ValueError("artifact.heads must match artifact.model_ids")
-    heads = []
-    for model_id in model_ids:
-        raw_head = _object(raw_heads[model_id], f"artifact.heads[{model_id!r}]")
-        _exact_keys(
-            raw_head,
-            ("intercept", "coefficients"),
-            f"artifact.heads[{model_id!r}]",
-        )
-        heads.append(
-            BinomialLogisticHead(
-                intercept=_number(
-                    raw_head["intercept"],
-                    f"artifact.heads[{model_id!r}].intercept",
-                ),
-                coefficients=_artifact_vector(
-                    raw_head["coefficients"],
-                    len(feature_names),
-                    f"artifact.heads[{model_id!r}].coefficients",
-                ),
-            )
-        )
-    return BinomialLogisticQualityModel(
-        feature_names=feature_names,
-        feature_mean=feature_mean,
-        feature_scale=feature_scale,
-        model_ids=model_ids,
-        heads=tuple(heads),
-    )
-
-
-def _sigmoid(logit: float) -> float:
-    if logit >= 0.0:
-        return 1.0 / (1.0 + math.exp(-logit))
-    exponential = math.exp(logit)
-    return exponential / (1.0 + exponential)
-
-
 def predict_model_qualities(
     model: BinomialLogisticQualityModel,
     features: Sequence[float],
 ) -> Mapping[str, float]:
-    """Predict each model's quality from one raw feature vector."""
+    """Predict with the canonical runtime implementation."""
 
-    raw = _vector(
-        features,
-        "features",
-        expected_length=len(model.feature_names),
-    )
-    standardized = tuple(
-        (value - mean) / scale
-        for value, mean, scale in zip(raw, model.feature_mean, model.feature_scale)
-    )
-    if any(not math.isfinite(value) for value in standardized):
-        raise ValueError("standardized features must remain finite")
-    prediction = {}
-    for model_id, head in zip(model.model_ids, model.heads):
-        terms = tuple(
-            coefficient * feature
-            for coefficient, feature in zip(head.coefficients, standardized)
-        )
-        if any(not math.isfinite(value) for value in terms):
-            raise ValueError(f"quality logit for {model_id!r} must remain finite")
-        try:
-            logit = head.intercept + math.fsum(terms)
-        except (OverflowError, ValueError) as error:
-            raise ValueError(
-                f"quality logit for {model_id!r} must remain finite"
-            ) from error
-        if not math.isfinite(logit):
-            raise ValueError(f"quality logit for {model_id!r} must remain finite")
-        prediction[model_id] = _sigmoid(logit)
-    return prediction
+    try:
+        values = tuple(features)
+    except TypeError as error:
+        raise ValueError("features must be a sequence") from error
+    return predict_binomial_quality(model, values)
 
 
 def _require_numpy() -> Any:

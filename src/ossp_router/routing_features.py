@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Tuple
+from typing import Sequence, Tuple
 
 from .heuristic import episode_text, extract_features
 from .protocol import Episode
@@ -120,3 +120,16 @@ def raw_feature_vector(episode: Episode, hash_bins: int) -> Tuple[float, ...]:
     if norm:
         bins = [value / norm for value in bins]
     return dense + tuple(bins)
+
+
+def standardize_feature_vector(
+    values: Sequence[float],
+    mean: Sequence[float],
+    scale: Sequence[float],
+) -> Tuple[float, ...]:
+    """Apply an artifact's fixed feature scaling to an existing vector."""
+
+    return tuple(
+        (value - center) / divisor
+        for value, center, divisor in zip(values, mean, scale)
+    )

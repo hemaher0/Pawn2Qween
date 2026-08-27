@@ -7,12 +7,41 @@
 from __future__ import annotations
 
 import math
-from typing import Mapping, Sequence, Tuple
+from typing import Mapping, Optional, Sequence, Tuple
 
 from .protocol import MODEL_IDS
 
 
 PREMIUM_AX31_FILL_SAFETY_RATIO = 0.65
+
+
+def allocate_tier(
+    predicted_scores: Sequence[Mapping[str, float]],
+    predicted_costs: Sequence[Mapping[str, float]],
+    *,
+    tier: str,
+    budget_multiplier: float,
+    safety_ratio: float,
+) -> Tuple[Tuple[str, ...], float, Optional[float]]:
+    """Run the retained initial allocation and optional premium fill."""
+
+    selected, ratio = select_models(
+        predicted_scores,
+        predicted_costs,
+        budget_multiplier=budget_multiplier,
+        safety_ratio=safety_ratio,
+    )
+    fill_safety = None
+    if tier == "premium":
+        fill_safety = PREMIUM_AX31_FILL_SAFETY_RATIO
+        selected, ratio = fill_ax31_upgrades(
+            selected,
+            predicted_scores,
+            predicted_costs,
+            budget_multiplier=budget_multiplier,
+            safety_ratio=fill_safety,
+        )
+    return selected, ratio, fill_safety
 
 
 def select_models(

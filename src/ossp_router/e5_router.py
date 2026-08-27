@@ -41,9 +41,7 @@ from .protocol import (
     load_bundled_policy,
     load_input,
     load_policy,
-    parse_submission,
     policy_sha256,
-    submission_to_dict,
 )
 from .routing_artifacts import (
     BinomialLogisticQualityModel,
@@ -156,25 +154,26 @@ def _route_with_diagnostics(
                 ),
             )
         )
-        predicted_costs.append(costs.predict_costs(episode, artifacts.hash_model))
+        hash_features = features.standardize_feature_vector(
+            raw_features,
+            artifacts.hash_model.feature_mean,
+            artifacts.hash_model.feature_scale,
+        )
+        predicted_costs.append(
+            costs.predict_costs_from_features(
+                hash_features,
+                artifacts.hash_model,
+            )
+        )
 
     safety_ratio = artifacts.hash_model.tier_safety_ratios[tier]
-    selected, predicted_ratio = allocator.select_models(
+    selected, predicted_ratio, fill_safety = allocator.allocate_tier(
         combined_quality,
         predicted_costs,
+        tier=tier,
         budget_multiplier=float(policy.tiers[tier].budget_multiplier),
         safety_ratio=safety_ratio,
     )
-    fill_safety = None
-    if tier == "premium":
-        fill_safety = allocator.PREMIUM_AX31_FILL_SAFETY_RATIO
-        selected, predicted_ratio = allocator.fill_ax31_upgrades(
-            selected,
-            combined_quality,
-            predicted_costs,
-            budget_multiplier=float(policy.tiers[tier].budget_multiplier),
-            safety_ratio=fill_safety,
-        )
     submission = Submission(
         schema_version=inputs.schema_version,
         challenge_id=inputs.challenge_id,
@@ -187,7 +186,7 @@ def _route_with_diagnostics(
         ),
     )
     return _RoutingResult(
-        submission=parse_submission(submission_to_dict(submission)),
+        submission=submission,
         predicted_budget_ratio=predicted_ratio,
         safety_ratio=safety_ratio,
         ax31_fill_safety_ratio=fill_safety,

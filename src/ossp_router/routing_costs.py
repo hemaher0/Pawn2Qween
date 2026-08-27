@@ -11,7 +11,7 @@ from typing import Mapping, Sequence
 
 from .protocol import MODEL_IDS, Episode
 from .routing_artifacts import HashRegexArtifact, LinearHead
-from .routing_features import raw_feature_vector
+from .routing_features import raw_feature_vector, standardize_feature_vector
 
 
 def _linear(head: LinearHead, values: Sequence[float]) -> float:
@@ -26,23 +26,19 @@ def standardized_features(
     artifact: HashRegexArtifact,
 ) -> tuple[float, ...]:
     raw = raw_feature_vector(episode, artifact.hash_bins)
-    return tuple(
-        (value - mean) / scale
-        for value, mean, scale in zip(
-            raw,
-            artifact.feature_mean,
-            artifact.feature_scale,
-        )
+    return standardize_feature_vector(
+        raw,
+        artifact.feature_mean,
+        artifact.feature_scale,
     )
 
 
-def predict_costs(
-    episode: Episode,
+def predict_costs_from_features(
+    features: Sequence[float],
     artifact: HashRegexArtifact,
 ) -> Mapping[str, float]:
-    """Return positive costs ordered monotonically by protocol model."""
+    """Predict monotonic costs from an existing standardized vector."""
 
-    features = standardized_features(episode, artifact)
     predicted = {
         model_id: math.exp(
             min(
@@ -65,3 +61,15 @@ def predict_costs(
         predicted[MODEL_IDS[1]] * (1.0 + 1e-12),
     )
     return predicted
+
+
+def predict_costs(
+    episode: Episode,
+    artifact: HashRegexArtifact,
+) -> Mapping[str, float]:
+    """Return positive costs ordered monotonically by protocol model."""
+
+    return predict_costs_from_features(
+        standardized_features(episode, artifact),
+        artifact,
+    )

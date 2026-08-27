@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 from typing import Any, Callable, Sequence, Tuple
 
@@ -221,16 +220,4 @@ class E5OnnxEncoder:
                 result[index] = vector
         if any(vector is None for vector in result):
             raise RuntimeError("E5 encoder did not return every input row")
-        vectors = tuple(vector for vector in result if vector is not None)
-        if any(
-            len(vector) != EMBEDDING_DIMENSION
-            or not math.isclose(
-                math.sqrt(sum(value * value for value in vector)),
-                1.0,
-                rel_tol=0.0,
-                abs_tol=2.0e-4,
-            )
-            for vector in vectors
-        ):
-            raise RuntimeError("E5 encoder returned invalid unit vectors")
-        return vectors
+        return tuple(vector for vector in result if vector is not None)

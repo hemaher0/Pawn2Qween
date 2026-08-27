@@ -7,12 +7,42 @@ import importlib.util
 import math
 import unittest
 
+from ossp_router import routing_artifacts, routing_quality
 from ossp_router.training import binomial_quality as quality
 
 NUMPY_AVAILABLE = importlib.util.find_spec("numpy") is not None
 
 
 class BinomialLogisticQualityTest(unittest.TestCase):
+    def test_training_uses_canonical_runtime_binomial_contract(self) -> None:
+        model = quality.BinomialLogisticQualityModel(
+            feature_names=("signal",),
+            feature_mean=(0.0,),
+            feature_scale=(1.0,),
+            model_ids=("model-a",),
+            heads=(quality.BinomialLogisticHead(0.0, (math.log(3.0),)),),
+        )
+        artifact = quality.model_to_artifact(model)
+
+        parsed = quality.parse_artifact(artifact)
+        training_prediction = quality.predict_model_qualities(parsed, (1.0,))
+        runtime_prediction = routing_quality.predict_binomial_quality(parsed, (1.0,))
+
+        self.assertIs(
+            quality.BinomialLogisticHead,
+            routing_artifacts.BinomialLogisticHead,
+        )
+        self.assertIs(
+            quality.BinomialLogisticQualityModel,
+            routing_artifacts.BinomialLogisticQualityModel,
+        )
+        self.assertIsInstance(
+            parsed,
+            routing_artifacts.BinomialLogisticQualityModel,
+        )
+        self.assertAlmostEqual(0.75, training_prediction["model-a"], places=12)
+        self.assertEqual(training_prediction, runtime_prediction)
+
     def test_prediction_uses_independent_model_heads(self) -> None:
         log_three = math.log(3.0)
         model = quality.BinomialLogisticQualityModel(

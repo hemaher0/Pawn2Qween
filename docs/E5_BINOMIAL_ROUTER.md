@@ -110,8 +110,9 @@ predicted cost가 budget cap을 넘으면 `penalty`를 높이고, cap 안으로 
 때까지 binary search를 수행합니다. 탐색 뒤에도 cap을 만족하는 allocation을
 만들 수 없으면 모든 프롬프트에 `ax31-light`를 선택합니다.
 
-이 과정은 [`hash_regex.select_models`](../baselines/hash_regex.py)에 구현되어
-있습니다.
+이 과정은 runtime 전용
+[`routing_allocator.select_models`](../src/ossp_router/routing_allocator.py)에
+구현되어 있습니다.
 
 ## premium tier의 AX31 추가 allocation
 
@@ -148,8 +149,9 @@ cost가 이 budget cap 안에 들도록 `penalty`를 binary search합니다. 이
 기존 선택을 낮은 모델로 변경하지 않습니다. 안전한 추가 allocation을 만들 수
 없으면 첫 번째 allocation 결과를 그대로 사용합니다.
 
-이 추가 단계는
-[`hash_regex.fill_ax31_upgrades`](../baselines/hash_regex.py)에 구현되어 있습니다.
+이 추가 단계는 runtime 전용
+[`routing_allocator.fill_ax31_upgrades`](../src/ossp_router/routing_allocator.py)에
+구현되어 있습니다.
 
 ## 구성요소와 input validation
 
@@ -176,11 +178,11 @@ atomic write하므로 작성 도중의 불완전한 파일을 남기지 않습�
 
 기본 runtime에는 다음 파일이 필요합니다.
 
-- `baselines/hash-regex-public.v1.json`: hash-regex feature standardization,
+- `src/ossp_router/resources/hash-regex-public.v1.json`: hash-regex feature standardization,
   cost head와 tier별 safety ratio
-- `baselines/binomial-logistic-quality-public.v1.json`: 후보 모델별 binomial
+- `src/ossp_router/resources/binomial-logistic-quality-public.v1.json`: 후보 모델별 binomial
   logistic quality parameter
-- `baselines/e5-bilinear-compatibility-public.v1.json`: E5 preprocessing
+- `src/ossp_router/resources/e5-bilinear-compatibility-public.v1.json`: E5 preprocessing
   identity, low-rank compatibility parameter와 blend weight
 - `build/e5-model/onnx/model.onnx`: pinned E5 ONNX model
 - `build/e5-model/onnx/tokenizer.json`: pinned E5 tokenizer
@@ -200,7 +202,7 @@ hash를 검증합니다. 출처, license, 파일 hash와 reproduction 방법은
 tier의 submission을 만듭니다.
 
 ```console
-PYTHONPATH=src:. python baselines/e5_binomial_router.py \
+uv run --locked --no-dev --group e5-runtime router-run \
   --input input.json \
   --tier balanced \
   --model-dir build/e5-model \

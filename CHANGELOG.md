@@ -26,6 +26,9 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Changed
 
+- Isolated the packaged E5 submission runtime under `ossp_router`, split
+  feature encoding, artifact fitting, and evaluation into offline-only stages,
+  and added distinct locked dependency and CI boundaries for each path.
 - Switched the packaged `router-run` and submission container entry point to
   the E5-binomial router, with pinned ARM64 runtime dependencies, model
   packaging, image-size checks, and constrained preflight execution.

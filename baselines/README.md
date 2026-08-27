@@ -124,25 +124,33 @@ for tier in fast balanced premium; do
 done
 ```
 
-같은 명령으로 만든 전역 계수 학습 파일
-[`hash-regex-public.v1.json`](hash-regex-public.v1.json)을 함께 제공합니다.
-따라서 학습 없이 아래처럼 바로 실행할 수도 있습니다.
+같은 명령으로 이미 학습한 전역 계수 파일은 runtime resource인
+[`hash-regex-public.v1.json`](../src/ossp_router/resources/hash-regex-public.v1.json)으로
+제공합니다. 제공된 결과를 재사용할 때는 다시 학습하지 않고 아래처럼 실행할 수
+있지만, 새 artifact를 개발할 때는 앞의 Train/Dev 절차를 실행해야 합니다.
 
 ```console
 uv run --locked --no-dev python baselines/hash_regex.py \
   --input data/materialized/dev/inputs.json \
-  --artifact baselines/hash-regex-public.v1.json \
+  --artifact src/ossp_router/resources/hash-regex-public.v1.json \
   --tier balanced \
   --output build/hash-regex/dev-balanced.json
 ```
 
 ## E5-binomial 제출 라우터
 
-[`e5_binomial_router.py`](e5_binomial_router.py)는 hash-regex cost head,
+공식 runtime인
+[`e5_router.py`](../src/ossp_router/e5_router.py)는 hash-regex cost head,
 binomial logistic quality head와 고정 E5 embedding의 저차원 compatibility
 head를 결합합니다. 세 학습 결과는 문항별 자료가 없는 aggregate JSON으로
 제공하며, E5 ONNX 모델과 tokenizer는 고정 리비전에서 별도로 받아 파일 크기와
 SHA-256을 확인합니다.
+
+E5 base weight는 fine-tune하지 않지만 세 routing artifact의 학습은 필수입니다.
+학습·평가 CLI는 [`train_e5_binomial_router.py`](train_e5_binomial_router.py)에,
+처음부터 끝까지 실행하는 명령과 고정 hyperparameter는
+[`../README.md`](../README.md)에 기록합니다. 공식 평가에서는 학습 완료
+artifact와 E5 파일을 이미지에 넣고 inference만 수행합니다.
 
 ```console
 python tools/fetch_e5_model.py \

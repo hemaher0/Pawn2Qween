@@ -64,8 +64,15 @@ The tested runtime dependency set is:
 - [tokenizers 0.22.2](https://github.com/huggingface/tokenizers/blob/v0.22.2/LICENSE),
   Apache-2.0.
 
-PyTorch is used only for offline fitting of the two-dimensional aggregate
-compatibility head. It is not imported by the runtime router.
+The locked `e5-train` group additionally uses:
+
+- [PyTorch 2.8.0](https://github.com/pytorch/pytorch/blob/v2.8.0/LICENSE),
+  BSD-3-Clause, only for offline fitting of the two-dimensional aggregate
+  compatibility head; and
+- [scikit-learn 1.7.2](https://github.com/scikit-learn/scikit-learn/blob/1.7.2/COPYING),
+  BSD-3-Clause, only for grouped evaluation folds.
+
+Neither dependency is installed in the runtime router image.
 
 ## Submission image contents
 
@@ -79,9 +86,9 @@ shipped in those wheels.
 The final image also contains exactly the E5 execution modules needed by the
 router, the bundled routing policy, and these three aggregate artifacts:
 
-- `baselines/hash-regex-public.v1.json`;
-- `baselines/binomial-logistic-quality-public.v1.json`; and
-- `baselines/e5-bilinear-compatibility-public.v1.json`.
+- `src/ossp_router/resources/hash-regex-public.v1.json`;
+- `src/ossp_router/resources/binomial-logistic-quality-public.v1.json`; and
+- `src/ossp_router/resources/e5-bilinear-compatibility-public.v1.json`.
 
 The build copies the project `LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md`,
 `LICENSES/`, and the pinned model specification to
@@ -112,7 +119,8 @@ First materialize content-aligned ONNX vectors. The archive is a local build
 artifact and is not committed.
 
 ```console
-PYTHONPATH=src:. python baselines/train_e5_binomial_router.py encode \
+uv run --locked --no-dev --group e5-runtime \
+  python baselines/train_e5_binomial_router.py encode \
   --train-input data/materialized/train/inputs.json \
   --dev-input data/materialized/dev/inputs.json \
   --model-spec configs/e5-model.v1.json \
@@ -125,13 +133,14 @@ CUDA device. The publication command fixes the retained seed, rank, optimizer,
 step count, regularization, and blend weight; it exposes no tuning flags.
 
 ```console
-PYTHONPATH=src:. python baselines/train_e5_binomial_router.py fit \
+uv run --locked --no-dev --group e5-train \
+  python baselines/train_e5_binomial_router.py fit \
   --train-input data/materialized/train/inputs.json \
   --train-outcomes data/train/outcomes.json \
-  --features build/e5-bilinear/onnx-features.npz \
-  --hash-artifact baselines/hash-regex-public.v1.json \
-  --binomial-output baselines/binomial-logistic-quality-public.v1.json \
-  --compatibility-output baselines/e5-bilinear-compatibility-public.v1.json
+  --features build/e5-training/onnx-features.npz \
+  --hash-artifact build/e5-training/hash-regex-public.v1.json \
+  --binomial-output build/e5-training/binomial-logistic-quality-public.v1.json \
+  --compatibility-output build/e5-training/e5-bilinear-compatibility-public.v1.json
 ```
 
 The committed artifacts contain only aggregate parameters and Train
@@ -146,7 +155,7 @@ the hash-regex cost predictions, and delegates selection to the existing
 cost-aware allocator.
 
 ```console
-PYTHONPATH=src:. python baselines/e5_binomial_router.py \
+uv run --locked --no-dev --group e5-runtime router-run \
   --input input.json \
   --tier balanced \
   --model-dir build/e5-model \

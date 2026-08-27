@@ -257,17 +257,51 @@ def fetch_model(
     return tuple(results)
 
 
+def check_model(
+    spec_path: Path,
+    output_root: Path,
+) -> Tuple[FetchResult, ...]:
+    """Verify every local file in the pinned public specification."""
+
+    spec = load_model_spec(spec_path)
+    results = []
+    for file in spec.files:
+        destination = output_root.joinpath(*file.path.parts)
+        if not destination.is_file():
+            raise ModelSpecError(f"missing model file: {file.path}")
+        actual_size = destination.stat().st_size
+        if actual_size != file.size:
+            raise ModelSpecError(
+                f"size mismatch for {file.path}: "
+                f"expected {file.size}, got {actual_size}"
+            )
+        if sha256_file(destination) != file.sha256:
+            raise ModelSpecError(f"SHA-256 mismatch for {file.path}")
+        results.append(
+            FetchResult(
+                path=destination,
+                status="checked",
+            )
+        )
+    return tuple(results)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--spec", type=Path, default=DEFAULT_SPEC)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--check", action="store_true")
     return parser
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        results = fetch_model(args.spec, args.output)
+        results = (
+            check_model(args.spec, args.output)
+            if args.check
+            else fetch_model(args.spec, args.output)
+        )
     except (OSError, ModelSpecError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2

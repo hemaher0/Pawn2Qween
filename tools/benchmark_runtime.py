@@ -218,13 +218,20 @@ def _sha256_file(path: pathlib.Path) -> str:
 
 def _source_tree_manifest() -> Dict[str, Any]:
     roots = (
+        ROOT / ".dockerignore",
+        ROOT / "LICENSE",
+        ROOT / "NOTICE",
+        ROOT / "THIRD_PARTY_NOTICES.md",
+        ROOT / "LICENSES",
+        ROOT / "pyproject.toml",
+        ROOT / "uv.lock",
         ROOT / "container/Dockerfile",
         ROOT / "container/measurement.Dockerfile",
         ROOT / "container/entrypoint.py",
+        ROOT / "configs/e5-model.v1.json",
+        ROOT / "tools/fetch_e5_model.py",
         ROOT / "src",
-        ROOT / "baselines/feature_budget.py",
-        ROOT / "baselines/hash_regex.py",
-        ROOT / "baselines/hash-regex-public.v1.json",
+        ROOT / "baselines",
     )
     files: List[pathlib.Path] = []
     for root in roots:
@@ -263,15 +270,7 @@ def _source_tree_manifest() -> Dict[str, Any]:
     ).encode("utf-8")
     return {
         "algorithm": "sha256",
-        "scope": [
-            "container/Dockerfile",
-            "container/measurement.Dockerfile",
-            "container/entrypoint.py",
-            "src",
-            "baselines/feature_budget.py",
-            "baselines/hash_regex.py",
-            "baselines/hash-regex-public.v1.json",
-        ],
+        "scope": [root.relative_to(ROOT).as_posix() for root in roots],
         "entries": entries,
         "sha256": hashlib.sha256(encoded).hexdigest(),
     }

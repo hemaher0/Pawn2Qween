@@ -283,9 +283,11 @@ class RepositoryPolicyTest(unittest.TestCase):
         self.assertIn(LATER_PROJECT_COPYRIGHT, script)
         self.assertIn(LICENSE_TAG + " Apache-2.0", script)
         self.assertIn("--platform linux/arm64", script)
-        self.assertIn("--load", script)
-        self.assertIn("docker image inspect", script)
-        self.assertIn('if [[ "$ARCH" != "arm64" ]]', script)
+        self.assertIn("--output type=docker", script)
+        self.assertIn("type=oci", script)
+        self.assertIn("tools/fetch_e5_model.py", script)
+        self.assertIn("tools/preflight_submission_image.py", script)
+        self.assertIn("tools/check_runtime.py", script)
 
     def test_release_workflow_is_tag_only_and_preserves_stable_latest(self) -> None:
         path = ROOT / ".github/workflows/release.yml"
@@ -844,28 +846,52 @@ class RepositoryPolicyTest(unittest.TestCase):
             "# SPDX-" + "License-Identifier: Apache-2.0",
             "",
             "**",
+            "!pyproject.toml",
+            "!uv.lock",
+            "!LICENSE",
+            "!NOTICE",
+            "!THIRD_PARTY_NOTICES.md",
+            "!LICENSES/",
+            "LICENSES/**",
+            "!LICENSES/Apache-2.0.txt",
+            "!LICENSES/BSD-3-Clause.txt",
+            "!LICENSES/MIT.txt",
+            "!configs/",
+            "configs/**",
+            "!configs/e5-model.v1.json",
+            "!tools/",
+            "tools/**",
+            "!tools/fetch_e5_model.py",
             "!src/",
             "src/**",
             "!src/ossp_router/",
             "src/ossp_router/**",
             "!src/ossp_router/__init__.py",
-            "!src/ossp_router/cli.py",
             "!src/ossp_router/heuristic.py",
-            "!src/ossp_router/image_evidence.py",
-            "!src/ossp_router/operator_helper.py",
-            "!src/ossp_router/orchestrator.py",
             "!src/ossp_router/protocol.py",
-            "!src/ossp_router/runtime.py",
-            "!src/ossp_router/scoring.py",
             "!src/ossp_router/resources/",
             "src/ossp_router/resources/**",
             "!src/ossp_router/resources/__init__.py",
             "!src/ossp_router/resources/routing-policy.v1.json",
             "!baselines/",
             "baselines/**",
-            "!baselines/feature_budget.py",
+            "!baselines/__init__.py",
+            "!baselines/binomial_logistic_quality.py",
+            "!baselines/e5_bilinear_compatibility.py",
+            "!baselines/e5_binomial_router.py",
+            "!baselines/e5_onnx_encoder.py",
             "!baselines/hash_regex.py",
             "!baselines/hash-regex-public.v1.json",
+            "!baselines/binomial-logistic-quality-public.v1.json",
+            "!baselines/e5-bilinear-compatibility-public.v1.json",
+            "!build/",
+            "build/**",
+            "!build/e5-model/",
+            "build/e5-model/**",
+            "!build/e5-model/onnx/",
+            "build/e5-model/onnx/**",
+            "!build/e5-model/onnx/model.onnx",
+            "!build/e5-model/onnx/tokenizer.json",
             "!container/",
             "container/**",
             "!container/Dockerfile",
@@ -951,7 +977,7 @@ class RepositoryPolicyTest(unittest.TestCase):
         dockerfile = (ROOT / "container/Dockerfile").read_text(encoding="utf-8")
         self.assertRegex(
             dockerfile,
-            r"FROM python:3\.11\.15-alpine3\.23@sha256:[0-9a-f]{64}",
+            r"FROM python:3\.11\.15-slim-bookworm@sha256:[0-9a-f]{64}",
         )
         self.assertIn(
             'io.sktelecom.ossp.source-manifest-sha256="${SOURCE_MANIFEST_SHA256}"',

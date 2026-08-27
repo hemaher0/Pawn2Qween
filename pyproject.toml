@@ -39,6 +39,11 @@ e5-runtime = [
   "onnxruntime==1.28.0",
   "tokenizers==0.22.2",
 ]
+e5-train = [
+  {include-group = "e5-runtime"},
+  "scikit-learn==1.7.2",
+  "torch==2.8.0; sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
 materialize = [
   "pyarrow==23.0.1",
 ]
@@ -68,11 +73,16 @@ conflicts = [
     {group = "e5-runtime"},
     {group = "deepmind"},
   ],
+  [
+    {group = "e5-train"},
+    {group = "deepmind"},
+  ],
 ]
 
 [tool.uv.dependency-groups]
 dev = {requires-python = ">=3.11"}
 e5-runtime = {requires-python = ">=3.11"}
+e5-train = {requires-python = ">=3.11,<3.12"}
 materialize = {requires-python = ">=3.10"}
 deepmind = {requires-python = ">=3.11"}
 

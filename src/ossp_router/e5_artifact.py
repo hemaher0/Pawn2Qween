@@ -262,43 +262,6 @@ class E5BilinearCompatibilityModel:
         object.__setattr__(self, "compatibility_weight", compatibility_weight)
 
 
-def model_to_artifact(model: E5BilinearCompatibilityModel) -> Dict[str, object]:
-    """Convert validated aggregate state to a JSON-compatible artifact."""
-
-    return {
-        "artifact_type": ARTIFACT_TYPE,
-        "schema_version": SCHEMA_VERSION,
-        "model_ids": list(model.model_ids),
-        "encoder": {
-            "model_id": model.encoder.model_id,
-            "revision": model.encoder.revision,
-            "onnx_sha256": model.encoder.onnx_sha256,
-            "tokenizer_sha256": model.encoder.tokenizer_sha256,
-            "preprocessing_id": model.encoder.preprocessing_id,
-        },
-        "embedding_mean": list(model.embedding_mean),
-        "projection": [list(row) for row in model.projection],
-        "heads": {
-            model_id: {
-                "vector": list(head.vector),
-                "bias": head.bias,
-            }
-            for model_id, head in zip(model.model_ids, model.heads)
-        },
-        "compatibility_weight": model.compatibility_weight,
-        "training": {
-            "train_input_sha256": model.training.train_input_sha256,
-            "train_outcome_sha256": model.training.train_outcome_sha256,
-            "seed": model.training.seed,
-            "rank": model.training.rank,
-            "steps": model.training.steps,
-            "learning_rate": model.training.learning_rate,
-            "weight_decay": model.training.weight_decay,
-            "jeffreys_pseudocount": model.training.jeffreys_pseudocount,
-        },
-    }
-
-
 def parse_compatibility_artifact(value: object) -> E5BilinearCompatibilityModel:
     """Parse a strict JSON-compatible aggregate artifact."""
 

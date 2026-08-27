@@ -17,6 +17,7 @@ try:
 except ModuleNotFoundError as error:
     raise unittest.SkipTest("E5 training tests require NumPy") from error
 
+from baselines import e5_artifact_publication as publication
 from baselines import train_e5_binomial_router as trainer
 from ossp_router import e5_artifact as compatibility
 from ossp_router.protocol import MODEL_IDS
@@ -49,6 +50,30 @@ def _metadata(train_rows: int, dev_rows: int) -> dict[str, object]:
 
 
 class TrainE5BinomialRouterTest(unittest.TestCase):
+    def test_cli_delegates_each_offline_stage_to_one_module(self) -> None:
+        root = pathlib.Path(__file__).resolve().parents[1]
+        cli = (root / "baselines/train_e5_binomial_router.py").read_text(
+            encoding="utf-8"
+        )
+        feature_stage = (root / "baselines/e5_training_features.py").read_text(
+            encoding="utf-8"
+        )
+        fit_stage = (root / "baselines/e5_training_fit.py").read_text(
+            encoding="utf-8"
+        )
+        evaluation_stage = (
+            root / "baselines/e5_training_evaluation.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertLessEqual(len(cli.splitlines()), 180)
+        self.assertIn("e5_training_features", cli)
+        self.assertIn("e5_training_fit", cli)
+        self.assertIn("e5_training_evaluation", cli)
+        self.assertNotIn("load_outcomes", feature_stage)
+        self.assertNotIn("import torch", feature_stage)
+        self.assertNotIn("dev_outcomes", fit_stage)
+        self.assertNotIn("E5OnnxEncoder", evaluation_stage)
+
     def test_deterministic_cuda_environment_is_set_before_torch_import(self) -> None:
         original = os.environ.pop("CUBLAS_WORKSPACE_CONFIG", None)
         try:
@@ -188,10 +213,10 @@ class TrainE5BinomialRouterTest(unittest.TestCase):
             **arguments,
         )
         first_bytes = trainer.canonical_artifact_bytes(
-            compatibility.model_to_artifact(first)
+            publication.compatibility_model_to_artifact(first)
         )
         second_bytes = trainer.canonical_artifact_bytes(
-            compatibility.model_to_artifact(second)
+            publication.compatibility_model_to_artifact(second)
         )
 
         self.assertEqual(first_bytes, second_bytes)
@@ -280,7 +305,7 @@ class TrainE5BinomialRouterTest(unittest.TestCase):
         )
 
         serialized = trainer.canonical_artifact_bytes(
-            compatibility.model_to_artifact(model)
+            publication.compatibility_model_to_artifact(model)
         ).decode("utf-8")
 
         for forbidden in (

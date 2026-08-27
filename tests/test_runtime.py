@@ -1377,6 +1377,43 @@ class RuntimeValidationTest(unittest.TestCase):
             ],
         )
 
+    def test_image_inspect_retries_when_platform_flag_is_unsupported(self) -> None:
+        unsupported = subprocess.CompletedProcess(
+            ("docker",),
+            125,
+            b"",
+            b"unknown flag: --platform\n",
+        )
+        inspected = subprocess.CompletedProcess(
+            ("docker",),
+            0,
+            (
+                b'"sha256:' + b"a" * 64 + b'"\n'
+                b'["registry.example/router@sha256:' + b"b" * 64 + b'"]\n'
+                b'"linux"\n'
+                b'"arm64"\n'
+                b"false\n"
+            ),
+            b"",
+        )
+        with mock.patch(
+            "ossp_router.runtime._run_control_command",
+            side_effect=((unsupported, None), (inspected, None)),
+        ) as run:
+            metadata = inspect_image_runtime_metadata(
+                ("docker",),
+                "sha256:" + "a" * 64,
+                platform="linux/arm64",
+            )
+
+        self.assertEqual("arm64", metadata["Architecture"])
+        self.assertEqual(2, run.call_count)
+        first_command = run.call_args_list[0].args[0]
+        second_command = run.call_args_list[1].args[0]
+        self.assertIn("--platform", first_command)
+        self.assertNotIn("--platform", second_command)
+        self.assertEqual(first_command[-1], second_command[-1])
+
     def test_runtime_daemon_id_is_read_with_a_bounded_info_query(self) -> None:
         completed = subprocess.CompletedProcess(
             ("docker",),

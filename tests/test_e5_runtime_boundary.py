@@ -33,6 +33,13 @@ class E5RuntimeBoundaryTest(unittest.TestCase):
                 offenders.append(path.relative_to(ROOT).as_posix())
         self.assertEqual([], offenders)
 
+    def test_product_runtime_contains_no_artifact_publication_code(self) -> None:
+        source = (ROOT / "src/ossp_router/e5_artifact.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertNotIn("def model_to_artifact", source)
+
     def test_runtime_artifacts_are_package_resources(self) -> None:
         resource_root = ROOT / "src/ossp_router/resources"
         required = {

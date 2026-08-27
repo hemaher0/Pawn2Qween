@@ -10,6 +10,7 @@ import pathlib
 import tempfile
 import unittest
 
+from baselines import e5_artifact_publication as publication
 from ossp_router import e5_artifact as compatibility
 from ossp_router.protocol import MODEL_IDS
 
@@ -78,7 +79,7 @@ class E5BilinearCompatibilityTest(unittest.TestCase):
     def test_artifact_round_trip_preserves_only_aggregate_state(self) -> None:
         model = _model()
 
-        artifact = compatibility.model_to_artifact(model)
+        artifact = publication.compatibility_model_to_artifact(model)
 
         self.assertEqual(
             {
@@ -115,7 +116,7 @@ class E5BilinearCompatibilityTest(unittest.TestCase):
     def test_parser_rejects_unknown_fields_wrong_dimensions_and_nonfinite_values(
         self,
     ) -> None:
-        artifact = compatibility.model_to_artifact(_model())
+        artifact = publication.compatibility_model_to_artifact(_model())
         unknown = copy.deepcopy(artifact)
         unknown["undeclared"] = True
         wrong_mean = copy.deepcopy(artifact)
@@ -131,7 +132,7 @@ class E5BilinearCompatibilityTest(unittest.TestCase):
                     compatibility.parse_compatibility_artifact(invalid)
 
     def test_parser_rejects_wrong_encoder_identity_models_and_blend(self) -> None:
-        artifact = compatibility.model_to_artifact(_model())
+        artifact = publication.compatibility_model_to_artifact(_model())
         wrong_encoder = copy.deepcopy(artifact)
         wrong_encoder["encoder"]["revision"] = "e" * 40
         wrong_models = copy.deepcopy(artifact)

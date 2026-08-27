@@ -88,10 +88,34 @@ jobs:
           tests.test_binomial_logistic_quality
           tests.test_e5_bilinear_compatibility
           tests.test_e5_binomial_router
+          tests.test_e5_dependency_matrix
           tests.test_e5_onnx_encoder
+          tests.test_e5_runtime_boundary
           tests.test_e5_runtime_dependencies
           tests.test_e5_runtime_packaging
           tests.test_fetch_e5_model
+
+  e5-training:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: src
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.3"
+          python-version: "3.11"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Sync E5 training environment
+        run: uv sync --locked --no-dev --group e5-train
+      - name: Run offline training unit tests
+        run: >-
+          uv run --locked --no-dev --group e5-train --no-sync
+          python -m unittest
+          tests.test_train_e5_binomial_router
 
   arm64-image:
     runs-on: ubuntu-latest

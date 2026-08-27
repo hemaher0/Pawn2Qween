@@ -12,7 +12,10 @@ import sys
 import tempfile
 import unittest
 
-import numpy as np
+try:
+    import numpy as np
+except ModuleNotFoundError as error:
+    raise unittest.SkipTest("E5 training tests require NumPy") from error
 
 from baselines import e5_bilinear_compatibility as compatibility
 from baselines import train_e5_binomial_router as trainer

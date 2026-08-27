@@ -279,6 +279,18 @@ class CliTest(unittest.TestCase):
 
             one_tier = target / "installed-balanced.json"
             router_run = environment_dir / "bin" / "router-run"
+            router_help = subprocess.run(
+                [str(router_run), "--help"],
+                cwd=target,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(0, router_help.returncode, router_help.stderr)
+            self.assertIn("--model-dir", router_help.stdout)
+            self.assertIn("--binomial-artifact", router_help.stdout)
+            self.assertIn("--compatibility-artifact", router_help.stdout)
             generated_tier = subprocess.run(
                 [
                     str(router_run),
@@ -295,8 +307,12 @@ class CliTest(unittest.TestCase):
                 text=True,
                 check=False,
             )
-            self.assertEqual(0, generated_tier.returncode, generated_tier.stderr)
-            self.assertEqual("balanced", json.loads(one_tier.read_bytes())["tier"])
+            self.assertEqual(2, generated_tier.returncode)
+            self.assertFalse(one_tier.exists())
+            self.assertEqual(
+                "error: router initialization or inference failed\n",
+                generated_tier.stderr,
+            )
 
             evaluator = environment_dir / "bin" / "router-evaluate-tier"
             evaluator_help = subprocess.run(

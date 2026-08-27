@@ -9,7 +9,10 @@ import tempfile
 import types
 import unittest
 
-import numpy as np
+try:
+    import numpy as np
+except ModuleNotFoundError as error:
+    raise unittest.SkipTest("E5 encoder tests require NumPy") from error
 
 from baselines import e5_bilinear_compatibility as compatibility
 from baselines import e5_onnx_encoder as encoder_module

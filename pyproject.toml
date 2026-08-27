@@ -23,7 +23,7 @@ router-cleanup-resources = "ossp_router.runtime:cleanup_main"
 router-evaluate-tier = "ossp_router.orchestrator:main"
 router-measure-image = "ossp_router.image_evidence:main"
 router-measure-tiebreak = "ossp_router.tiebreak_latency:main"
-router-run = "ossp_router.heuristic:main"
+router-run = "baselines.e5_binomial_router:main"
 router-self-check = "ossp_router.cli:self_check_entry"
 
 [dependency-groups]
@@ -33,6 +33,11 @@ dev = [
 ]
 train = [
   "numpy==2.0.2",
+]
+e5-runtime = [
+  "numpy==2.0.2",
+  "onnxruntime==1.28.0",
+  "tokenizers==0.22.2",
 ]
 materialize = [
   "pyarrow==23.0.1",
@@ -45,26 +50,30 @@ deepmind = [
 ]
 
 [tool.setuptools]
-package-dir = {"" = "src"}
 include-package-data = true
-
-[tool.setuptools.packages.find]
-where = ["src"]
+package-dir = {"" = "src", "baselines" = "baselines"}
+packages = ["ossp_router", "ossp_router.resources", "baselines"]
 
 [tool.setuptools.package-data]
+"baselines" = ["*.json"]
 "ossp_router.resources" = ["*.json"]
 
 [tool.uv]
-required-version = "==0.12.3"
+required-version = ">=0.12.3,<0.13"
 conflicts = [
   [
     {group = "train"},
+    {group = "deepmind"},
+  ],
+  [
+    {group = "e5-runtime"},
     {group = "deepmind"},
   ],
 ]
 
 [tool.uv.dependency-groups]
 dev = {requires-python = ">=3.11"}
+e5-runtime = {requires-python = ">=3.11"}
 materialize = {requires-python = ">=3.10"}
 deepmind = {requires-python = ">=3.11"}
 

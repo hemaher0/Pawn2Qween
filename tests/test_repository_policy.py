@@ -35,6 +35,7 @@ CANONICAL_LICENSE_HASHES = {
 REQUIRED_FILES = {
     ".github/workflows/ci.yml",
     ".github/workflows/release.yml",
+    ".github/workflows/submission-image.yml",
     ".python-version",
     "CHANGELOG.md",
     "CONTRIBUTING.md",
@@ -310,6 +311,47 @@ class RepositoryPolicyTest(unittest.TestCase):
         self.assertIn("--latest=false", workflow)
         self.assertNotIn("pypi", workflow.lower())
         self.assertNotIn("ghcr", workflow.lower())
+
+    def test_submission_image_workflow_publishes_native_arm64_evidence(self) -> None:
+        path = ROOT / ".github/workflows/submission-image.yml"
+        self.assertTrue(path.is_file(), "submission image workflow is missing")
+        workflow = path.read_text(encoding="utf-8")
+
+        self.assertRegex(
+            workflow,
+            r'(?m)^  push:\n    tags:\n      - "submission-image-\*"$',
+        )
+        self.assertNotIn("pull_request:", workflow)
+        self.assertNotIn("workflow_dispatch:", workflow)
+        self.assertIn("packages: write", workflow)
+        self.assertIn("runs-on: ubuntu-24.04-arm", workflow)
+        self.assertIn("timeout-minutes: 60", workflow)
+        self.assertNotIn("setup-qemu", workflow)
+
+        action_refs = re.findall(r"(?m)^\s+uses:\s+(\S+)", workflow)
+        self.assertEqual(4, len(action_refs))
+        for action_ref in action_refs:
+            action, separator, ref = action_ref.partition("@")
+            self.assertTrue(separator, f"third-party action has no ref: {action}")
+            self.assertRegex(ref, r"\A[0-9a-f]{40}\Z")
+
+        required = (
+            "ghcr.io/hemaher0/pawn2qween",
+            "tools/materialize_public_data.py",
+            "tools/fetch_e5_model.py",
+            "--platform linux/arm64",
+            "--push",
+            "docker/login-action@",
+            "secrets.GITHUB_TOKEN",
+            "skopeo copy --all --preserve-digests",
+            "python3 -m ossp_router.image_evidence",
+            "tools/check_runtime.py",
+            "docker logout ghcr.io",
+            "skopeo inspect --no-creds",
+            "actions/upload-artifact@",
+        )
+        for marker in required:
+            self.assertIn(marker, workflow)
 
     def test_workflows_pin_actions_and_uv(self) -> None:
         workflows = "\n".join(

@@ -65,6 +65,10 @@ class E5ContainerContractTest(unittest.TestCase):
         )
         self.assertIn("USER 65532:65532", dockerfile)
         self.assertNotIn("VOLUME", dockerfile)
+        self.assertIn("ARG SOURCE_COMMIT_SHA=unbound", dockerfile)
+        self.assertIn("ARG SOURCE_REPOSITORY_URL=unbound", dockerfile)
+        self.assertIn("org.opencontainers.image.revision", dockerfile)
+        self.assertIn("org.opencontainers.image.source", dockerfile)
 
     def test_arm64_build_fetches_model_and_runs_hard_limit_preflight(self) -> None:
         script = (ROOT / "scripts/build-arm64.sh").read_text(encoding="utf-8")
@@ -82,6 +86,8 @@ class E5ContainerContractTest(unittest.TestCase):
         self.assertIn("Temporary Buildx builder cleanup failed", script)
         self.assertIn('rm -f -- "$PREFLIGHT_REPORT" "$FULL_RUNTIME_REPORT"', script)
         self.assertIn('--image "$IMAGE_ID"', script)
+        self.assertIn("SOURCE_COMMIT_SHA", script)
+        self.assertIn("SOURCE_REPOSITORY_URL", script)
 
 
 if __name__ == "__main__":

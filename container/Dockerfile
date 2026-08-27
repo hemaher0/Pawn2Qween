@@ -33,8 +33,12 @@ FROM python:3.11.15-slim-bookworm@sha256:d29f48a31a8b408ed19272ca1e7b10ebae13b24
 RUN python3 -m pip uninstall --yes pip setuptools wheel
 
 ARG SOURCE_MANIFEST_SHA256=unbound
+ARG SOURCE_COMMIT_SHA=unbound
+ARG SOURCE_REPOSITORY_URL=unbound
 
-LABEL io.sktelecom.ossp.source-manifest-sha256="${SOURCE_MANIFEST_SHA256}"
+LABEL io.sktelecom.ossp.source-manifest-sha256="${SOURCE_MANIFEST_SHA256}" \
+    org.opencontainers.image.revision="${SOURCE_COMMIT_SHA}" \
+    org.opencontainers.image.source="${SOURCE_REPOSITORY_URL}"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     OPENBLAS_NUM_THREADS=2 \

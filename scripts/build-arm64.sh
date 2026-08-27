@@ -63,6 +63,12 @@ SOURCE_MANIFEST_SHA256="$(
     python3 "$REPO_ROOT/tools/benchmark_runtime.py" \
       --print-source-manifest-sha256
 )"
+SOURCE_COMMIT_SHA="${SOURCE_COMMIT_SHA:-$(git -C "$REPO_ROOT" rev-parse HEAD)}"
+SOURCE_REPOSITORY_URL="${SOURCE_REPOSITORY_URL:-https://github.com/hemaher0/Pawn2Qween}"
+if [[ ! "$SOURCE_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "ERROR: SOURCE_COMMIT_SHA must be a full lowercase Git commit SHA" >&2
+  exit 2
+fi
 
 OCI_LAYOUT=""
 PREFLIGHT_WORK=""
@@ -129,6 +135,8 @@ docker buildx build \
   --output type=docker \
   --output "type=oci,dest=$OCI_LAYOUT,tar=false,name=$IMAGE_NAME" \
   --build-arg "SOURCE_MANIFEST_SHA256=$SOURCE_MANIFEST_SHA256" \
+  --build-arg "SOURCE_COMMIT_SHA=$SOURCE_COMMIT_SHA" \
+  --build-arg "SOURCE_REPOSITORY_URL=$SOURCE_REPOSITORY_URL" \
   --file "$DOCKERFILE" \
   "$REPO_ROOT"
 

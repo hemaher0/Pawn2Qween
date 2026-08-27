@@ -96,6 +96,12 @@ IMAGE_NAME=my-router:check ./scripts/build-arm64.sh
 `linux/arm64` Docker 서버에서 실행합니다. QEMU smoke는 호환성 검사이며 전체
 Train+Dev의 90초 증거가 아닙니다.
 
+참가 fork의 `main`에 최종 코드가 반영된 뒤 `submission-image-*` 태그를 push하면
+`Publish submission image` workflow가 네이티브 ARM64 runner에서 이미지를
+`ghcr.io/hemaher0/pawn2qween`에 게시합니다. workflow artifact의
+`image-digest.txt`, `image-size.json`, `runtime.json`에서 제출 이미지 참조와
+크기 및 공개 Train+Dev 세 등급 실행 결과를 확인합니다.
+
 사전, 토크나이저, 학습한 분류기나 소형 언어 처리 모델을 포함했다면 저장소에
 다음 정보를 기록합니다.
 

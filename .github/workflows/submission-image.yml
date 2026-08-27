@@ -1,0 +1,134 @@
+# SPDX-FileCopyrightText: Copyright 2026 hemaher0
+# SPDX-License-Identifier: Apache-2.0
+
+name: Publish submission image
+
+on:
+  push:
+    tags:
+      - "submission-image-*"
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: submission-image
+  cancel-in-progress: false
+
+env:
+  IMAGE_REPOSITORY: ghcr.io/hemaher0/pawn2qween
+  PYTHONPATH: src
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require a commit already on main
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.3"
+          python-version: "3.11"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Materialize public Train and Dev inputs
+        run: |
+          set -euo pipefail
+          uv sync --locked --no-dev --group materialize
+          uv run --locked --no-dev --group materialize --no-sync \
+            python tools/materialize_public_data.py
+      - name: Fetch and verify the pinned E5 model
+        run: |
+          set -euo pipefail
+          python3 tools/fetch_e5_model.py \
+            --spec configs/e5-model.v1.json \
+            --output build/e5-model
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish the native ARM64 image
+        run: |
+          set -euo pipefail
+          SOURCE_MANIFEST_SHA256="$(
+            PYTHONPATH=src:. python3 tools/benchmark_runtime.py \
+              --print-source-manifest-sha256
+          )"
+          docker buildx build \
+            --platform linux/arm64 \
+            --pull \
+            --push \
+            --provenance=false \
+            --sbom=false \
+            --tag "$IMAGE_REPOSITORY:$GITHUB_REF_NAME" \
+            --build-arg "SOURCE_MANIFEST_SHA256=$SOURCE_MANIFEST_SHA256" \
+            --build-arg "SOURCE_COMMIT_SHA=$GITHUB_SHA" \
+            --build-arg \
+              "SOURCE_REPOSITORY_URL=https://github.com/hemaher0/Pawn2Qween" \
+            --metadata-file "$RUNNER_TEMP/build-metadata.json" \
+            --file container/Dockerfile \
+            .
+          MANIFEST_DIGEST="$(
+            python3 -c \
+              'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["containerimage.digest"])' \
+              "$RUNNER_TEMP/build-metadata.json"
+          )"
+          if [[ ! "$MANIFEST_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "ERROR: Buildx did not return an immutable manifest digest" >&2
+            exit 1
+          fi
+          IMAGE_DIGEST="$IMAGE_REPOSITORY@$MANIFEST_DIGEST"
+          echo "IMAGE_DIGEST=$IMAGE_DIGEST" >> "$GITHUB_ENV"
+          docker pull --platform linux/arm64 "$IMAGE_DIGEST"
+      - name: Measure the published image
+        run: |
+          set -euo pipefail
+          install -d -m 0700 build/submission-evidence
+          install -d -m 0700 "$RUNNER_TEMP/submission-oci"
+          printf '%s\n' "$IMAGE_DIGEST" \
+            > build/submission-evidence/image-digest.txt
+          printf '%s\n' "$GITHUB_SHA" \
+            > build/submission-evidence/source-commit.txt
+          chmod 0600 build/submission-evidence/*.txt
+          skopeo copy --all --preserve-digests \
+            "docker://$IMAGE_DIGEST" \
+            "oci:$RUNNER_TEMP/submission-oci:submission"
+          python3 -m ossp_router.image_evidence \
+            --oci-layout "$RUNNER_TEMP/submission-oci" \
+            --image "$IMAGE_DIGEST" \
+            --output build/submission-evidence/image-size.json
+      - name: Run the full native Train and Dev runtime check
+        run: |
+          set -euo pipefail
+          python3 tools/check_runtime.py \
+            --image "$IMAGE_DIGEST" \
+            --train-input data/materialized/train/inputs.json \
+            --dev-input data/materialized/dev/inputs.json \
+            --registry data/public-data.v1.json \
+            --report build/submission-evidence/runtime.json
+      - name: Require anonymous registry access
+        run: |
+          set -euo pipefail
+          docker logout ghcr.io
+          skopeo inspect --no-creds "docker://$IMAGE_DIGEST" >/dev/null
+      - name: Upload submission evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
+        with:
+          name: submission-image-evidence
+          path: build/submission-evidence
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0

@@ -736,6 +736,20 @@ def inspect_image_runtime_metadata(
         max_stdout_bytes=1024 * 1024,
         max_stderr_bytes=64 * 1024,
     )
+    if (
+        platform is not None
+        and error is None
+        and completed is not None
+        and completed.returncode != 0
+        and b"unknown flag: --platform" in completed.stderr
+    ):
+        arguments = [*runtime_command, "image", "inspect", "--format", template, image]
+        completed, error = _run_control_command(
+            arguments,
+            timeout_seconds=15,
+            max_stdout_bytes=1024 * 1024,
+            max_stderr_bytes=64 * 1024,
+        )
     if error is not None or completed is None or completed.returncode != 0:
         raise InfrastructureUnavailable(
             _control_failure_detail(

@@ -62,3 +62,23 @@ AIME problem text is not included in this repository or release archive.
 `data/train/aime-selection.json` and `data/dev/aime-selection.json` contain
 only public source keys and expected prompt hashes. Users fetch the pinned
 public sources and materialize those prompts locally.
+
+## E5 router model and runtime
+
+The E5 compatibility router uses the upstream FP32 ONNX export from
+`intfloat/multilingual-e5-small`, copyrighted by its upstream authors and
+licensed under the [MIT License](LICENSES/MIT.txt). The exact upstream revision
+and runtime-file hashes are recorded in
+[`configs/e5-model.v1.json`](configs/e5-model.v1.json). Model bytes are not
+included in this repository. The image build fetches them into an ignored
+local build directory, verifies them, and includes the ONNX graph and tokenizer
+in the generated submission image.
+
+The locked image runtime contains NumPy 2.0.2 under BSD-3-Clause, ONNX Runtime
+1.28.0 under MIT, and Hugging Face tokenizers 0.22.2 under
+[Apache-2.0](LICENSES/Apache-2.0.txt), together with their resolved transitive
+dependencies. Their exact package sources and artifact hashes are in
+`uv.lock`; the copied virtual environment retains the metadata and license
+files shipped by the installed wheels. Version-specific upstream license
+evidence is linked from
+[`docs/E5_MODEL_PROVENANCE.md`](docs/E5_MODEL_PROVENANCE.md).

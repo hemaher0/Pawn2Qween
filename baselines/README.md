@@ -12,6 +12,10 @@ README의 [Quickstart](../README.md#quickstart-baseline에서-시작하기)에�
 사용할 수 있습니다. 실제 제출에서는 `src/ossp_router/heuristic.py`를 바꾸거나
 같은 `router-run` 인터페이스를 제공하는 구현으로 교체하면 됩니다.
 
+이 저장소 자체의 `router-run`과 제출 컨테이너는 아래의 E5-binomial 라우터를
+기본 실행합니다. 앞의 네 구현은 인터페이스·학습·점수 흐름을 설명하기 위한
+비교 baseline으로 계속 제공합니다.
+
 ## 모든 문항에 경량 모델 선택
 
 [`always_light.py`](always_light.py)는 모든 문항에 `ax31-light`를 선택하고
@@ -131,6 +135,33 @@ uv run --locked --no-dev python baselines/hash_regex.py \
   --tier balanced \
   --output build/hash-regex/dev-balanced.json
 ```
+
+## E5-binomial 제출 라우터
+
+[`e5_binomial_router.py`](e5_binomial_router.py)는 hash-regex cost head,
+binomial logistic quality head와 고정 E5 embedding의 저차원 compatibility
+head를 결합합니다. 세 학습 결과는 문항별 자료가 없는 aggregate JSON으로
+제공하며, E5 ONNX 모델과 tokenizer는 고정 리비전에서 별도로 받아 파일 크기와
+SHA-256을 확인합니다.
+
+```console
+python tools/fetch_e5_model.py \
+  --spec configs/e5-model.v1.json \
+  --output build/e5-model
+
+uv run --locked --no-dev --group e5-runtime \
+  router-run \
+  --input data/toy/inputs.json \
+  --tier balanced \
+  --output build/e5-binomial-balanced.json
+```
+
+모델 선택 흐름과 구성요소 검증은
+[`../docs/E5_BINOMIAL_ROUTER.md`](../docs/E5_BINOMIAL_ROUTER.md), 모델 출처와
+라이선스는
+[`../docs/E5_MODEL_PROVENANCE.md`](../docs/E5_MODEL_PROVENANCE.md)에 기록합니다.
+제출용 ARM64 이미지에는 [`../scripts/build-arm64.sh`](../scripts/build-arm64.sh)를
+사용하십시오.
 
 ## 공개 Dev 비교
 

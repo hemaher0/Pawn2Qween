@@ -63,20 +63,20 @@ router-run \
 ## 이미지 빌드와 제출
 
 ```console
-docker build \
-  --pull \
-  --platform linux/arm64 \
-  --file container/Dockerfile \
-  --tag ossp-router:local \
-  .
+IMAGE_NAME=ossp-router:local ./scripts/build-arm64.sh
 ```
 
-제공하는 기준 Dockerfile은 가장 단순한 제출 이미지 예시이며 반드시 이 기반
-이미지를 사용할 필요는 없습니다. 이 예시는 `python:3.11.15-alpine3.23`의
-다중 플랫폼 인덱스 다이제스트를 고정하고 저장소의 실행 코드만 복사합니다.
-참가자 이미지는 필요한 공개 의존성을 빌드 단계에서 설치할 수 있지만, 버전과
-라이선스를 기록하고 실행 중 다운로드 없이 동작해야 합니다. 기반 이미지
-출처와 라이선스는
+제공하는 Dockerfile은 E5-binomial 제출 라우터를 실행합니다. 빌드 스크립트는
+고정 리비전의 E5 ONNX 모델과 tokenizer를 `build/e5-model`에 내려받고 크기와
+SHA-256을 검증한 뒤 `linux/arm64` 이미지를 만듭니다. 이미지에는 세 aggregate
+artifact와 NumPy 2.0.2, ONNX Runtime 1.28.0, tokenizers 0.22.2를 포함하며,
+실행 중 다운로드하지 않습니다. 모델 출처와 재현 절차는
+[`E5_MODEL_PROVENANCE.md`](E5_MODEL_PROVENANCE.md)에 있습니다.
+
+기준 이미지는 `python:3.11.15-slim-bookworm`의 다중 플랫폼 인덱스
+다이제스트를 고정합니다. 반드시 이 기반 이미지를 사용할 필요는 없지만,
+참가자 이미지의 공개 의존성은 버전과 라이선스를 기록하고 실행 중 다운로드
+없이 동작해야 합니다. 기반 이미지 출처와 라이선스는
 [`../container/BASE_IMAGE.md`](../container/BASE_IMAGE.md)에 기록했습니다.
 
 최종 제출에서는 공개 저장소의 평가할 커밋 SHA에서 이미지를 빌드하고,
@@ -161,8 +161,46 @@ Docker 호스트, 이미지 레지스트리, 입력 마운트나 평가 실행�
 
 ## 로컬 검증
 
-최종 이미지는 공개 Train/Dev 전체로 세 등급의 90초 한도를 미리 확인할 수
-있습니다.
+`scripts/build-arm64.sh`는 빌드 후 다음 사전 검사를 항상 수행합니다.
+
+- OCI layout의 `linux/arm64` manifest와 로컬 이미지 config digest 결합
+- 선택 플랫폼 OCI 압축 계층 합계 1 GiB 한도
+- 병합 rootfs 겉보기 크기 2 GiB 한도
+- `VOLUME`이 없는 비특권 `linux/arm64` 이미지 설정
+- Balanced toy 입력 한 번의 실제 E5 추론과 출력 검증
+
+smoke 실행에는 CPU 2개, 메모리 2 GiB, 추가 스왑 없음, 프로세스·스레드
+32개, 네트워크 없음, 읽기 전용 rootfs, 256 MiB `/tmp`와 90초 제한을
+적용합니다. 측정값과 실행 환경은 `build/e5-image-preflight.json`에
+기록합니다.
+
+```console
+IMAGE_NAME=my-router:check ./scripts/build-arm64.sh
+```
+
+이 JSON은 항상 `submission_ready: false`이며 build-local screening만
+나타냅니다. 레지스트리 push 과정에서 manifest나 압축 계층이 달라질 수
+있으므로, 최종 repository digest의 1 GiB·2 GiB 증거는
+[`OPERATIONS.md`](OPERATIONS.md#이미지-식별과-크기-증거)의 공식 절차로 다시
+생성해야 합니다.
+
+이 smoke는 작은 toy 입력 한 번만 사용하므로 공개 Train+Dev 전체의 등급별
+90초 통과 증거가 아닙니다. 특히 x86-64 호스트의 QEMU 실행은 ARM64 명령어와
+wheel 호환성을 선별하는 용도이며 레이턴시나 메모리 여유를 공식 플랫폼과
+같다고 볼 수 없습니다. 스크립트가 `INCONCLUSIVE`를 출력했다면 아직 제출용
+성능 검증이 남아 있습니다.
+
+최종 이미지는 materialization을 마친 공개 Train/Dev 전체로 세 등급의 90초
+한도를 네이티브 `linux/arm64` Docker 서버에서 확인해야 합니다. 다음 strict
+명령은 서버가 네이티브 ARM64가 아니거나 두 입력 파일이 없으면 실패합니다.
+
+```console
+OSSP_REQUIRE_NATIVE_RUNTIME=1 \
+  IMAGE_NAME=my-router:check \
+  ./scripts/build-arm64.sh
+```
+
+이미 빌드한 이미지를 대상으로 전체 검사만 다시 실행할 수도 있습니다.
 
 ```console
 PYTHONPATH=src python3 tools/check_runtime.py \
@@ -176,7 +214,8 @@ PYTHONPATH=src python3 tools/check_runtime.py \
 materialization을 마친 공개 Train 1,760문항과 Dev 880문항입니다. 공개
 모델별 outcome과 최종 평가 자료는 컨테이너에 전달하지 않습니다.
 
-Docker 서버가 공식 `linux/arm64` 장비와 다르면 도구가 경고합니다. 로컬
+Docker 서버가 공식 `linux/arm64` 장비와 다르면 도구가 경고합니다. 그
+환경에서 얻은 시간은 호환성 참고값이지 제출용 90초 판정이 아닙니다. 로컬
 검사는 출력 파일을 사후 검증하고, 공식 평가는 4 MiB 제한 tmpfs와 운영자
 보안 검사를 추가로 적용하므로 최종 판정은 공식 환경의 실행 결과를 따릅니다.
 

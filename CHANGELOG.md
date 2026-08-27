@@ -26,6 +26,9 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Changed
 
+- Switched the packaged `router-run` and submission container entry point to
+  the E5-binomial router, with pinned ARM64 runtime dependencies, model
+  packaging, image-size checks, and constrained preflight execution.
 - Routing quality can now compose the independent binomial hash-regex signal
   with E5 prompt/model compatibility using a fixed equal-logit blend; existing
   cost prediction and budget-aware allocation remain unchanged.

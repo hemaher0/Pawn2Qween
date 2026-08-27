@@ -9,6 +9,8 @@ import json
 import pathlib
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from unittest import mock
 
 from tools import fetch_e5_model as fetcher
 
@@ -104,6 +106,151 @@ class FetchE5ModelTest(unittest.TestCase):
             )
 
             self.assertEqual(("cached", "cached"), tuple(row.status for row in results))
+
+    def test_check_cli_reports_exact_local_files_as_checked(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_directory:
+            directory = pathlib.Path(raw_directory)
+            output = directory / "output"
+            (output / "onnx").mkdir(parents=True)
+            model_path = output / "onnx/model.onnx"
+            tokenizer_path = output / "onnx/tokenizer.json"
+            model_path.write_bytes(MODEL_BYTES)
+            tokenizer_path.write_bytes(TOKENIZER_BYTES)
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+
+            try:
+                with redirect_stdout(stdout), redirect_stderr(stderr):
+                    status = fetcher.main(
+                        [
+                            "--spec",
+                            str(self._write_spec(directory)),
+                            "--output",
+                            str(output),
+                            "--check",
+                        ]
+                    )
+            except SystemExit as error:
+                status = error.code
+
+            self.assertEqual(0, status, stderr.getvalue())
+            self.assertEqual(
+                f"checked: {model_path}\nchecked: {tokenizer_path}\n",
+                stdout.getvalue(),
+            )
+            self.assertEqual(MODEL_BYTES, model_path.read_bytes())
+            self.assertEqual(TOKENIZER_BYTES, tokenizer_path.read_bytes())
+
+    def test_check_rejects_a_missing_file_without_creating_it(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_directory:
+            directory = pathlib.Path(raw_directory)
+            output = directory / "output"
+            (output / "onnx").mkdir(parents=True)
+            model_path = output / "onnx/model.onnx"
+            tokenizer_path = output / "onnx/tokenizer.json"
+            model_path.write_bytes(MODEL_BYTES)
+
+            with (
+                mock.patch.object(
+                    fetcher,
+                    "_download_file",
+                    side_effect=AssertionError("check mode attempted a download"),
+                ),
+                self.assertRaisesRegex(
+                    fetcher.ModelSpecError,
+                    "onnx/tokenizer.json",
+                ),
+            ):
+                fetcher.check_model(self._write_spec(directory), output)
+
+            self.assertEqual(MODEL_BYTES, model_path.read_bytes())
+            self.assertFalse(tokenizer_path.exists())
+
+    def test_check_rejects_same_size_corruption_without_replacing_it(self) -> None:
+        corrupt_model = b"MODEL-bytes"
+        self.assertEqual(len(MODEL_BYTES), len(corrupt_model))
+        with tempfile.TemporaryDirectory() as raw_directory:
+            directory = pathlib.Path(raw_directory)
+            output = directory / "output"
+            (output / "onnx").mkdir(parents=True)
+            model_path = output / "onnx/model.onnx"
+            tokenizer_path = output / "onnx/tokenizer.json"
+            model_path.write_bytes(corrupt_model)
+            tokenizer_path.write_bytes(TOKENIZER_BYTES)
+
+            with (
+                mock.patch.object(
+                    fetcher,
+                    "_download_file",
+                    side_effect=AssertionError("check mode attempted a download"),
+                ),
+                self.assertRaisesRegex(
+                    fetcher.ModelSpecError,
+                    "SHA-256 mismatch for onnx/model.onnx",
+                ),
+            ):
+                fetcher.check_model(self._write_spec(directory), output)
+
+            self.assertEqual(corrupt_model, model_path.read_bytes())
+            self.assertEqual(TOKENIZER_BYTES, tokenizer_path.read_bytes())
+
+    def test_check_rejects_wrong_size_without_replacing_it(self) -> None:
+        truncated_model = MODEL_BYTES[:-1]
+        with tempfile.TemporaryDirectory() as raw_directory:
+            directory = pathlib.Path(raw_directory)
+            output = directory / "output"
+            (output / "onnx").mkdir(parents=True)
+            model_path = output / "onnx/model.onnx"
+            tokenizer_path = output / "onnx/tokenizer.json"
+            model_path.write_bytes(truncated_model)
+            tokenizer_path.write_bytes(TOKENIZER_BYTES)
+
+            with (
+                mock.patch.object(
+                    fetcher,
+                    "_download_file",
+                    side_effect=AssertionError("check mode attempted a download"),
+                ),
+                self.assertRaisesRegex(
+                    fetcher.ModelSpecError,
+                    "size mismatch for onnx/model.onnx",
+                ),
+            ):
+                fetcher.check_model(self._write_spec(directory), output)
+
+            self.assertEqual(truncated_model, model_path.read_bytes())
+            self.assertEqual(TOKENIZER_BYTES, tokenizer_path.read_bytes())
+
+    def test_check_cli_returns_two_for_a_missing_file(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_directory:
+            directory = pathlib.Path(raw_directory)
+            output = directory / "output"
+            (output / "onnx").mkdir(parents=True)
+            model_path = output / "onnx/model.onnx"
+            tokenizer_path = output / "onnx/tokenizer.json"
+            model_path.write_bytes(MODEL_BYTES)
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                status = fetcher.main(
+                    [
+                        "--spec",
+                        str(self._write_spec(directory)),
+                        "--output",
+                        str(output),
+                        "--check",
+                    ]
+                )
+
+            self.assertEqual(2, status)
+            self.assertEqual("", stdout.getvalue())
+            self.assertEqual(
+                "error: missing model file: onnx/tokenizer.json\n",
+                stderr.getvalue(),
+            )
+            self.assertEqual(MODEL_BYTES, model_path.read_bytes())
+            self.assertFalse(tokenizer_path.exists())
 
     def test_corrupt_download_leaves_no_destination_or_temporary_file(self) -> None:
         def corrupt_opener(url: str, *, timeout: int):

@@ -1075,14 +1075,17 @@ class RuntimeValidationTest(unittest.TestCase):
 
     def test_dockerfile_pins_multi_platform_base_and_nonroot_user(self) -> None:
         text = DOCKERFILE.read_text(encoding="utf-8")
-        match = re.search(
-            r"^FROM python:3\.11\.15-alpine3\.23@sha256:([0-9a-f]{64})$",
+        matches = re.findall(
+            r"^FROM python:3\.11\.15-slim-bookworm@sha256:([0-9a-f]{64})"
+            r"(?: AS dependencies)?$",
             text,
             re.MULTILINE,
         )
-        self.assertIsNotNone(match)
+        self.assertEqual(2, len(matches))
+        self.assertEqual(1, len(set(matches)))
         self.assertIn("USER 65532:65532", text)
-        self.assertNotIn("pip install", text)
+        final_stage = text.rsplit("\nFROM ", maxsplit=1)[1]
+        self.assertNotIn("pip install", final_stage)
         self.assertNotRegex(text, r"\b(?:ADD|curl|wget)\b")
 
     def test_official_limits_match_report_and_runtime_docs(self) -> None:

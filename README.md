@@ -160,11 +160,12 @@ uv run --locked --no-dev python tools/validate_technical_submission.py
 ```
 
 최종 이미지의 실행 시간과 자원 제한은 공개 Train/Dev 전체로 미리 확인할 수
-있습니다. 로컬 태그는 검사 시작 시 변경 불가능한 이미지 ID로 고정됩니다.
+있습니다. 제공하는 빌드 스크립트는 고정 E5 ONNX 모델과 tokenizer를 내려받아
+검증하고 `linux/arm64` E5-binomial 이미지를 만든 뒤, 이미지 크기와 제한된
+toy smoke를 먼저 검사합니다.
 
 ```console
-docker build --pull --platform linux/arm64 \
-  --file container/Dockerfile --tag my-router:check .
+IMAGE_NAME=my-router:check ./scripts/build-arm64.sh
 
 uv run --locked --no-dev python tools/check_runtime.py \
   --image my-router:check \
@@ -173,7 +174,16 @@ uv run --locked --no-dev python tools/check_runtime.py \
 
 이 검사는 위 materialization으로 만든 공개 Train 1,760문항과 Dev 880문항만
 사용합니다. 공개 모델별 outcome과 최종 평가 자료는 컨테이너에 전달하지
-않으며, 공식 장비와 다른 환경에서 측정한 시간은 참고값입니다.
+않습니다. QEMU를 사용하는 비네이티브 호스트의 smoke와 전체 검사 시간은
+호환성 참고값이며 90초 통과 증거가 아닙니다. 제출 전에는 네이티브
+`linux/arm64` 서버에서 다음 strict 빌드를 실행해 세 등급의 전체 Train+Dev
+검사를 완료하십시오.
+
+```console
+OSSP_REQUIRE_NATIVE_RUNTIME=1 \
+  IMAGE_NAME=my-router:check \
+  ./scripts/build-arm64.sh
+```
 
 ## 문서
 

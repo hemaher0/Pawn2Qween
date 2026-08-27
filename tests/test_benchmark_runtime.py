@@ -274,14 +274,44 @@ class BenchmarkEvidenceTest(unittest.TestCase):
         manifest = benchmark_runtime._source_tree_manifest()
         artifacts = benchmark_runtime._artifact_hashes()
         self.assertEqual(64, len(manifest["sha256"]))
+        self.assertEqual(
+            [
+                ".dockerignore",
+                "LICENSE",
+                "NOTICE",
+                "THIRD_PARTY_NOTICES.md",
+                "LICENSES",
+                "pyproject.toml",
+                "uv.lock",
+                "container/Dockerfile",
+                "container/measurement.Dockerfile",
+                "container/entrypoint.py",
+                "configs/e5-model.v1.json",
+                "tools/fetch_e5_model.py",
+                "src",
+                "baselines",
+            ],
+            manifest["scope"],
+        )
         paths = {entry["path"] for entry in manifest["entries"]}
         self.assertIn("container/Dockerfile", paths)
         self.assertIn("container/measurement.Dockerfile", paths)
         self.assertIn("container/entrypoint.py", paths)
+        self.assertIn(".dockerignore", paths)
+        self.assertIn("LICENSE", paths)
+        self.assertIn("NOTICE", paths)
+        self.assertIn("THIRD_PARTY_NOTICES.md", paths)
+        self.assertIn("LICENSES/Apache-2.0.txt", paths)
+        self.assertIn("pyproject.toml", paths)
+        self.assertIn("uv.lock", paths)
+        self.assertIn("configs/e5-model.v1.json", paths)
+        self.assertIn("tools/fetch_e5_model.py", paths)
         self.assertIn("src/ossp_router/runtime.py", paths)
         self.assertIn("baselines/feature_budget.py", paths)
         self.assertIn("baselines/hash_regex.py", paths)
         self.assertIn("baselines/hash-regex-public.v1.json", paths)
+        self.assertIn("baselines/e5_binomial_router.py", paths)
+        self.assertIn("baselines/e5-bilinear-compatibility-public.v1.json", paths)
         self.assertNotIn("tools/benchmark_runtime.py", paths)
         self.assertFalse(any(".egg-info/" in path for path in paths))
         self.assertEqual(

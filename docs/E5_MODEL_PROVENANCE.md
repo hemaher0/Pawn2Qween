@@ -57,12 +57,54 @@ does not download files or access outcomes.
 
 The tested runtime dependency set is:
 
-- NumPy 2.0.2, BSD-3-Clause;
-- ONNX Runtime 1.28.0, MIT; and
-- tokenizers 0.22.2, Apache-2.0.
+- [NumPy 2.0.2](https://github.com/numpy/numpy/blob/v2.0.2/LICENSE.txt),
+  BSD-3-Clause;
+- [ONNX Runtime 1.28.0](https://github.com/microsoft/onnxruntime/blob/v1.28.0/LICENSE),
+  MIT; and
+- [tokenizers 0.22.2](https://github.com/huggingface/tokenizers/blob/v0.22.2/LICENSE),
+  Apache-2.0.
 
 PyTorch is used only for offline fitting of the two-dimensional aggregate
 compatibility head. It is not imported by the runtime router.
+
+## Submission image contents
+
+The submission image uses the digest-pinned
+`python:3.11.15-slim-bookworm` Docker Official Image. Its dependency stage
+installs the locked `e5-runtime` group for `linux/arm64`; the final stage copies
+that virtual environment without `uv` or Python package-management tools. The
+copied environment retains installed wheel metadata and any license files
+shipped in those wheels.
+
+The final image also contains exactly the E5 execution modules needed by the
+router, the bundled routing policy, and these three aggregate artifacts:
+
+- `baselines/hash-regex-public.v1.json`;
+- `baselines/binomial-logistic-quality-public.v1.json`; and
+- `baselines/e5-bilinear-compatibility-public.v1.json`.
+
+The build copies the project `LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md`,
+`LICENSES/`, and the pinned model specification to
+`/usr/share/licenses/pawn2qween/`. The upstream model license declaration,
+immutable revision, file sizes, and hashes remain recorded in
+[`configs/e5-model.v1.json`](../configs/e5-model.v1.json); runtime dependency
+notices are summarized in
+[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md).
+
+Run the supported image build from the repository root:
+
+```console
+IMAGE_NAME=my-router:check ./scripts/build-arm64.sh
+```
+
+The script downloads or revalidates the model cache before Docker receives the
+build context. It then measures the ARM64 OCI compressed layers and merged
+root filesystem against the hard image limits and runs one constrained toy
+smoke. On a non-ARM64 Docker server, that smoke is compatibility screening
+only. It does not replace the required native ARM64 full Train+Dev latency
+check described in [`RUNTIME.md`](RUNTIME.md). The generated local report has
+`submission_ready: false`; the exact pushed repository digest requires separate
+official image-size evidence.
 
 ## Reproducing aggregate artifacts
 

@@ -10,7 +10,7 @@ import pathlib
 import tempfile
 import unittest
 
-from baselines import e5_bilinear_compatibility as compatibility
+from ossp_router import e5_artifact as compatibility
 from ossp_router.protocol import MODEL_IDS
 
 

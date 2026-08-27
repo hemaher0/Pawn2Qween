@@ -14,8 +14,8 @@ try:
 except ModuleNotFoundError as error:
     raise unittest.SkipTest("E5 encoder tests require NumPy") from error
 
-from baselines import e5_bilinear_compatibility as compatibility
-from baselines import e5_onnx_encoder as encoder_module
+from ossp_router import e5_artifact as compatibility
+from ossp_router import e5_encoder as encoder_module
 
 
 class _Encoding:

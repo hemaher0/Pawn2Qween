@@ -24,6 +24,7 @@ class E5RuntimePackagingTest(unittest.TestCase):
             for item in distribution.entry_points
             if item.group == "console_scripts" and item.name == "router-run"
         )
+        self.assertEqual("ossp_router.e5_router:main", entrypoint.value)
 
         output = io.StringIO()
         with redirect_stdout(output), self.assertRaises(SystemExit) as raised:
@@ -38,16 +39,16 @@ class E5RuntimePackagingTest(unittest.TestCase):
     def test_installed_distribution_contains_e5_runtime_resources(self) -> None:
         script = """
 from importlib import resources
-from baselines import e5_binomial_router
+from ossp_router import e5_router
 
-root = resources.files("baselines")
+root = resources.files("ossp_router.resources")
 required = (
     "hash-regex-public.v1.json",
     "binomial-logistic-quality-public.v1.json",
     "e5-bilinear-compatibility-public.v1.json",
 )
 missing = [name for name in required if not root.joinpath(name).is_file()]
-raise SystemExit(0 if not missing and callable(e5_binomial_router.main) else 1)
+raise SystemExit(0 if not missing and callable(e5_router.main) else 1)
 """
         with tempfile.TemporaryDirectory() as temporary:
             result = subprocess.run(

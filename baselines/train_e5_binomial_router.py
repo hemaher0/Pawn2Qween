@@ -27,10 +27,10 @@ for import_root in (ROOT, ROOT / "src"):
     if str(import_root) not in sys.path:
         sys.path.insert(0, str(import_root))
 
-from baselines import e5_bilinear_compatibility as compatibility  # noqa: E402
-from baselines import e5_onnx_encoder  # noqa: E402
 from baselines import binomial_logistic_quality as binomial  # noqa: E402
 from baselines import hash_regex  # noqa: E402
+from ossp_router import e5_artifact as compatibility  # noqa: E402
+from ossp_router import e5_encoder as e5_onnx_encoder  # noqa: E402
 from ossp_router.heuristic import episode_text  # noqa: E402
 from ossp_router.protocol import (  # noqa: E402
     MODEL_IDS,

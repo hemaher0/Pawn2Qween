@@ -50,7 +50,8 @@ class E5ContainerContractTest(unittest.TestCase):
         self.assertIn("tools/fetch_e5_model.py", dockerfile)
         self.assertIn("--check", dockerfile)
         self.assertIn("COPY --from=dependencies", dockerfile)
-        self.assertIn("COPY --chown=65532:65532 baselines", dockerfile)
+        self.assertIn("COPY --chown=65532:65532 src/ossp_router", dockerfile)
+        self.assertNotIn("COPY --chown=65532:65532 baselines", dockerfile)
         self.assertIn(
             "COPY --from=dependencies --chown=65532:65532 "
             "/build/e5-model /opt/router/build/e5-model",
@@ -69,6 +70,10 @@ class E5ContainerContractTest(unittest.TestCase):
         self.assertIn("ARG SOURCE_REPOSITORY_URL=unbound", dockerfile)
         self.assertIn("org.opencontainers.image.revision", dockerfile)
         self.assertIn("org.opencontainers.image.source", dockerfile)
+
+        entrypoint = (ROOT / "container/entrypoint.py").read_text(encoding="utf-8")
+        self.assertIn("from ossp_router.e5_router import main", entrypoint)
+        self.assertNotIn("from baselines", entrypoint)
 
     def test_arm64_build_fetches_model_and_runs_hard_limit_preflight(self) -> None:
         script = (ROOT / "scripts/build-arm64.sh").read_text(encoding="utf-8")

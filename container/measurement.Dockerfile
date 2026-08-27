@@ -19,7 +19,7 @@ COPY --chown=65532:65532 src container/entrypoint.py /opt/router/
 COPY --chown=65532:65532 \
     baselines/feature_budget.py \
     baselines/hash_regex.py \
-    baselines/hash-regex-public.v1.json \
+    src/ossp_router/resources/hash-regex-public.v1.json \
     /opt/router/baselines/
 
 WORKDIR /opt/router

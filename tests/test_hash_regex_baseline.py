@@ -212,7 +212,9 @@ class HashRegexBaselineTest(unittest.TestCase):
             hash_regex.parse_artifact(raw)
 
     def test_public_artifact_and_dev_report_match_released_data(self) -> None:
-        artifact_path = ROOT / "baselines/hash-regex-public.v1.json"
+        artifact_path = (
+            ROOT / "src/ossp_router/resources/hash-regex-public.v1.json"
+        )
         report_path = ROOT / "baselines/hash-regex-public-dev-report.v1.json"
         artifact = hash_regex.load_artifact(artifact_path)
         public_data = json.loads(

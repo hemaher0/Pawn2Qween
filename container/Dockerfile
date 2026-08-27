@@ -51,7 +51,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 COPY --from=dependencies --chown=65532:65532 /opt/e5-runtime /opt/e5-runtime
 COPY --from=dependencies --chown=65532:65532 /build/e5-model /opt/router/build/e5-model
 COPY --chown=65532:65532 src/ossp_router /opt/router/ossp_router
-COPY --chown=65532:65532 baselines /opt/router/baselines
 COPY --chown=65532:65532 container/entrypoint.py /opt/router/entrypoint.py
 COPY LICENSE NOTICE THIRD_PARTY_NOTICES.md /usr/share/licenses/pawn2qween/
 COPY LICENSES /usr/share/licenses/pawn2qween/LICENSES/

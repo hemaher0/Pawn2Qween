@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from baselines.e5_binomial_router import main
+from ossp_router.e5_router import main
 
 
 if __name__ == "__main__":
